@@ -24,8 +24,10 @@ const main = async () => {
 
 async function mainLoop(browser: puppeteer.Browser) {
   logger.info("🚀 Starting main loop...");
+  let page: puppeteer.Page | undefined = undefined;
+
   try {
-    const page = await browser.newPage();
+    page = await browser.newPage();
     await page.goto(config.baseUrl);
 
     const universities = await getUniversities(page);
@@ -52,6 +54,13 @@ async function mainLoop(browser: puppeteer.Browser) {
     }
   } catch (error) {
     logger.error("🚀🔴 Error in main loop:", error);
+    if (page) {
+      try {
+        await page.close();
+      } catch (error) {
+        logger.error("🚀🔴 Error in closing page:", error);
+      }
+    }
     await new Promise((resolve) => setTimeout(resolve, 5000));
     mainLoop(browser);
   }
