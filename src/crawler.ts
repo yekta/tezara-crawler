@@ -190,7 +190,7 @@ export const safeSearchTheses = async (
   page: Page,
   university: University,
   year: string,
-  retries = 2
+  retries = 1
 ): Promise<string> => {
   return pRetry(() => searchTheses(page, university, year), {
     retries,
