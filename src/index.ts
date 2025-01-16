@@ -2,15 +2,15 @@ import { promises as fs } from "node:fs";
 import * as puppeteer from "puppeteer";
 import { config } from "./config";
 import { getUniversities, getYears, crawlUniversity } from "./crawler";
-import { getDownloadPath, isAlreadyCrawled } from "./utils";
+import { getPath, isAlreadyCrawled } from "./utils";
 import { logger } from "./logger";
 
 const main = async () => {
+  await fs.mkdir(getPath(config.downloadDir), { recursive: true });
+  await fs.mkdir(getPath(config.logsDir), { recursive: true });
+
   logger.info("Starting crawler...");
   try {
-    // Create downloads directory
-    await fs.mkdir(getDownloadPath(config.downloadDir), { recursive: true });
-
     const browser = await puppeteer.launch({
       headless: false,
     });

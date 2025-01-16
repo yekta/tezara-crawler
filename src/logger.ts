@@ -1,12 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
+import { getPath } from "./utils";
+import { config } from "./config";
 
 const now = new Date().toISOString();
-const logFilePath = path.resolve(`logs-${now}.txt`);
 
 const logToFile = (message: string) => {
   const timestamp = new Date().toISOString();
   const logMessage = `[${timestamp}] ${message}\n`;
+  const logsPath = getPath(config.logsDir);
+  const logFilePath = path.join(logsPath, `${now}.txt`);
   fs.appendFileSync(logFilePath, logMessage, { encoding: "utf8" });
 };
 

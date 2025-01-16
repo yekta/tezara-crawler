@@ -12,11 +12,8 @@ export const sleep = (ms: number): Promise<void> =>
 export const sanitizeFilename = (filename: string): string =>
   filename.replace(/[^a-z0-9]/gi, "_").toLowerCase();
 
-export const getProgressFilePath = (progressFile: string): string =>
-  path.join(path.dirname(__dirname), progressFile);
-
-export const getDownloadPath = (downloadDir: string): string =>
-  path.join(path.dirname(__dirname), downloadDir);
+export const getPath = (name: string): string =>
+  path.join(path.dirname(__dirname), name);
 
 export const getKeyForUniversity = (
   university: University,
@@ -29,10 +26,7 @@ export const isAlreadyCrawled = async (
   progressFile: string
 ): Promise<boolean> => {
   try {
-    const progress = await fs.readFile(
-      getProgressFilePath(progressFile),
-      "utf-8"
-    );
+    const progress = await fs.readFile(getPath(progressFile), "utf-8");
     const key = getKeyForUniversity(university, year);
     return progress.includes(key);
   } catch {
@@ -47,5 +41,5 @@ export const markAsCrawled = async (
 ): Promise<void> => {
   const key = getKeyForUniversity(university, year);
   console.log("🖊️ Marking as crawled:", key);
-  await fs.appendFile(getProgressFilePath(progressFile), key + "\n");
+  await fs.appendFile(getPath(progressFile), key + "\n");
 };
