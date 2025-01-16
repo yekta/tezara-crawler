@@ -10,24 +10,18 @@ const main = async () => {
   await fs.mkdir(getPath(config.logsDir), { recursive: true });
   logger.info("Starting crawler...");
 
-  try {
-    const browser = await puppeteer.launch({
-      headless: true,
-    });
-    await mainLoop(browser);
-    browser.close();
-  } catch (error) {
-    logger.error("Fatal error:", error);
-    process.exit(1);
-  }
+  mainLoop();
 };
 
-async function mainLoop(browser: puppeteer.Browser) {
+async function mainLoop() {
   logger.info("🚀 Starting main loop...");
-  let page: puppeteer.Page | undefined = undefined;
+  let browser: puppeteer.Browser | undefined = undefined;
 
   try {
-    page = await browser.newPage();
+    browser = await puppeteer.launch({
+      headless: true,
+    });
+    const page = await browser.newPage();
     await page.goto(config.baseUrl);
 
     const universities = await getUniversities(page);
@@ -54,15 +48,15 @@ async function mainLoop(browser: puppeteer.Browser) {
     }
   } catch (error) {
     logger.error("🚀🔴 Error in main loop:", error);
-    if (page) {
+    if (browser) {
       try {
-        await page.close();
+        await browser.close();
       } catch (error) {
-        logger.error("🚀🔴 Error in closing page:", error);
+        logger.error("🚀🔴 Error closing browser:", error);
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 5000));
-    mainLoop(browser);
+    mainLoop();
   }
 }
 

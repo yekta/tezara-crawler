@@ -115,6 +115,7 @@ export const searchTheses = async (
   if (page.url() !== config.baseUrl) {
     await page.goto(config.baseUrl, {
       waitUntil: "domcontentloaded",
+      timeout: 10000,
     });
   }
 
