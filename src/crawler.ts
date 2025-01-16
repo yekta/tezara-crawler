@@ -25,7 +25,7 @@ export const getUniversities = async (page: Page): Promise<University[]> => {
   }
 
   logger.info("Popup opened, waiting for content...");
-  await popup.waitForSelector("table#sf"); // Ensure table is loaded
+  await popup.waitForSelector("table#sf", { timeout: 10000 }); // Ensure table is loaded
 
   const universities = await popup.$$eval('a[href*="eklecikar"]', (links) =>
     links
