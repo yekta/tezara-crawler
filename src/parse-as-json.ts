@@ -1,58 +1,15 @@
 import fs from "fs";
 import path from "path";
-import { JSDOM } from "jsdom";
-import { parse } from "acorn";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath } from "url";
+import * as cheerio from "cheerio";
+import { parse as acornParse } from "acorn";
+import { simple as walk } from "acorn-walk";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Extracts `var doc` objects from a single HTML file
-const extractVarDocs = (html: string): object[] => {
-  const varDocs: object[] = [];
-
-  const dom = new JSDOM(html);
-  const scriptElements = dom.window.document.querySelectorAll("script");
-
-  scriptElements.forEach((script) => {
-    if (script.textContent) {
-      try {
-        const ast = parse(script.textContent, { ecmaVersion: "latest" });
-
-        traverseAST(ast, (node) => {
-          if (
-            node.type === "VariableDeclaration" &&
-            node.declarations &&
-            node.declarations[0].id.name === "doc"
-          ) {
-            const initNode = node.declarations[0].init;
-
-            if (initNode && initNode.type === "ObjectExpression") {
-              const jsonObject = astNodeToJson(initNode);
-              if (jsonObject) {
-                varDocs.push(jsonObject);
-              }
-            }
-          }
-        });
-      } catch (error) {
-        console.error("Error parsing JavaScript:", error);
-      }
-    }
-  });
-
-  return varDocs;
-};
-
-// Traverse the AST
-const traverseAST = (node: any, callback: (node: any) => void) => {
-  callback(node);
-  for (const key in node) {
-    if (node[key] && typeof node[key] === "object") {
-      traverseAST(node[key], callback);
-    }
-  }
-};
+// We'll store parse-error filenames in this array
+const parseErrors: string[] = [];
 
 // Convert AST ObjectExpression to JSON
 const astNodeToJson = (node: any): object | null => {
@@ -78,42 +35,152 @@ const astNodeToJson = (node: any): object | null => {
       result[key] = value;
     }
   });
+
   return result;
 };
 
-// Process all HTML files in the `../downloads` folder
-const processFiles = async () => {
-  const downloadsDir = path.resolve(__dirname, "../downloads");
-  const jsonsDir = path.resolve(__dirname, "../jsons");
+// Extract `var doc` and detect `getData` function
+const extractDataFromScript = (scriptContent: string) => {
+  let hasGetData = false;
+  const varDocs: object[] = [];
 
-  if (!fs.existsSync(jsonsDir)) {
-    fs.mkdirSync(jsonsDir, { recursive: true });
+  try {
+    const ast = acornParse(scriptContent, {
+      ecmaVersion: "latest",
+      sourceType: "script",
+    });
+
+    walk(ast, {
+      // Detect `getData` function
+      FunctionDeclaration(node: any) {
+        if (node.id?.name === "getData") {
+          hasGetData = true;
+        }
+      },
+      // Detect `var doc = { ... }`
+      VariableDeclaration(node: any) {
+        node.declarations.forEach((decl: any) => {
+          if (
+            decl.id?.name === "doc" &&
+            decl.init?.type === "ObjectExpression"
+          ) {
+            const jsonObject = astNodeToJson(decl.init);
+            if (jsonObject) {
+              varDocs.push(jsonObject);
+            }
+          }
+        });
+      },
+    });
+  } catch (error) {
+    console.error("Error parsing script content:", error);
+    // Do not throw, since we handle it further up
   }
 
-  const files = fs
-    .readdirSync(downloadsDir)
-    .filter((file) => file.endsWith(".html"));
+  return { hasGetData, varDocs };
+};
 
-  for (const file of files) {
-    const filePath = path.join(downloadsDir, file);
-    const outputFilePath = path.join(jsonsDir, file.replace(".html", ".json"));
+let totalExtractedCount = 0;
 
-    try {
-      const htmlContent = fs.readFileSync(filePath, "utf8");
-      const extractedDocs = extractVarDocs(htmlContent);
+// Process a single HTML file
+const processFile = (filePath: string, outputDir: string) => {
+  try {
+    const htmlContent = fs.readFileSync(filePath, "utf8");
 
-      // Write the extracted docs to a JSON file
-      fs.writeFileSync(
-        outputFilePath,
-        JSON.stringify(extractedDocs, null, 2),
-        "utf8"
-      );
-      console.log(`Processed ${file} -> ${outputFilePath}`);
-    } catch (error) {
-      console.error(`Error processing ${file}:`, error);
+    // 1. Use Cheerio to parse the HTML
+    let $ = cheerio.load(htmlContent);
+
+    // 2. Extract all <script> tags
+    const scriptElements = $("script");
+    console.log(`Found ${scriptElements.length} script tags in ${filePath}`);
+
+    let hasGetData = false;
+    const extractedDocs: object[] = [];
+
+    scriptElements.each((_, scriptEl) => {
+      const scriptContent = $(scriptEl).text().trim();
+      if (scriptContent) {
+        const { hasGetData: foundGetData, varDocs } =
+          extractDataFromScript(scriptContent);
+
+        if (foundGetData) {
+          hasGetData = true;
+        }
+        extractedDocs.push(...varDocs);
+      }
+    });
+
+    // Ensure `getData` exists, or record parse error
+    if (!hasGetData) {
+      console.error(`Error: Missing "getData" function in ${filePath}`);
+      parseErrors.push(filePath);
+      // Clean up
+      $ = null as any;
+      return;
     }
+
+    // If no "var doc" found, skip writing JSON
+    if (extractedDocs.length === 0) {
+      console.log(`No "var doc" found in ${filePath}, skipping.`);
+      // Clean up
+      $ = null as any;
+      return;
+    }
+
+    // Accumulate counts for global tracking
+    totalExtractedCount += extractedDocs.length;
+
+    // Write results to the corresponding JSON file
+    const outputFileName = path.basename(filePath, ".html") + ".json";
+    const outputPath = path.join(outputDir, outputFileName);
+
+    fs.writeFileSync(outputPath, JSON.stringify(extractedDocs, null, 2));
+    console.log(
+      `Processed ${filePath} -> ${outputPath}. Entries extracted: ${extractedDocs.length}`
+    );
+
+    // Release Cheerio references
+    $ = null as any;
+  } catch (error) {
+    console.error(`Error processing ${filePath}:`, error);
+    parseErrors.push(filePath);
   }
 };
 
-// Run the script
-processFiles().catch((err) => console.error(err));
+// Process all files
+const processAllFiles = () => {
+  // We assume this script is under src/, so ../downloads will be the correct path
+  const inputDir = path.resolve(__dirname, "../downloads");
+  const outputDir = path.resolve(__dirname, "../jsons");
+
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const files = fs
+    .readdirSync(inputDir)
+    .filter((file) => file.endsWith(".html"));
+
+  files.forEach((file) => {
+    const filePath = path.join(inputDir, file);
+    processFile(filePath, outputDir);
+  });
+
+  console.log(
+    `\nTotal extracted entries across all files: ${totalExtractedCount}`
+  );
+
+  // Write parse-errors.txt if there are any
+  if (parseErrors.length > 0) {
+    // Use outputDir, then go one level up (..) so parse-errors.txt sits at the same level as jsons.
+    const errorsPath = path.join(outputDir, "../json-parse-errors.txt");
+
+    fs.writeFileSync(errorsPath, parseErrors.join("\n"), "utf8");
+    console.log(
+      `\nEncountered errors in ${parseErrors.length} file(s). Names saved to ${errorsPath}`
+    );
+  }
+};
+
+// Execute the script
+processAllFiles();

@@ -183,6 +183,16 @@ export const searchTheses = async (
   const recordCount = match ? parseInt(match[1], 10) : 0;
   logger.info(`Found ${recordCount} records.`);
 
+  const html = await page.content();
+
+  // Check if `getData()` exists in the page
+  if (!html.includes("getData()")) {
+    logger.error(
+      `❌ No getData() found for ${university.name}, Year: ${year}. Throwing error.`
+    );
+    throw new Error(`No getData() found for ${university.name}, Year: ${year}`);
+  }
+
   return page.content();
 };
 

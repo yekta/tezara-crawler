@@ -4,6 +4,7 @@ downloads
 progress.txt
 logs
 jsons
+json-parse-errors.txt
 
 # Node modules
 node_modules/

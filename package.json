@@ -10,11 +10,13 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "parse": "tsx --node-arg=--max-old-space-size=8192 src/parse-as-json.ts",
+    "parse": "tsx src/parse-as-json.ts",
     "type-check": "tsc"
   },
   "dependencies": {
     "acorn": "^8.14.0",
+    "acorn-walk": "^8.3.4",
+    "cheerio": "^1.0.0",
     "jsdom": "^26.0.0",
     "p-retry": "^6.2.1",
     "puppeteer": "^24.1.0",
