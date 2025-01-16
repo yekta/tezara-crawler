@@ -1,17 +1,14 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import pRetry from "p-retry";
 import type { Page } from "puppeteer";
-import type { CrawlerConfig, University } from "./types.js";
-import {
-  getDownloadPath,
-  markAsCrawled,
-  sanitizeFilename,
-  sleep,
-} from "./utils";
-import { config } from "./config.js";
+import { config } from "./config";
+import type { CrawlerConfig, University } from "./types";
+import { getDownloadPath, markAsCrawled, sanitizeFilename } from "./utils";
+import { logger } from "./logger";
 
 export const getUniversities = async (page: Page): Promise<University[]> => {
-  console.log("🎓 Fetching list of universities...");
+  logger.info("🎓 Fetching list of universities...");
 
   const [popup] = await Promise.all([
     new Promise<Page | null>((resolve) =>
@@ -27,7 +24,7 @@ export const getUniversities = async (page: Page): Promise<University[]> => {
     throw new Error("Failed to open university selection popup");
   }
 
-  console.log("Popup opened, waiting for content...");
+  logger.info("Popup opened, waiting for content...");
   await popup.waitForSelector("table#sf"); // Ensure table is loaded
 
   const universities = await popup.$$eval('a[href*="eklecikar"]', (links) =>
@@ -45,7 +42,7 @@ export const getUniversities = async (page: Page): Promise<University[]> => {
       .filter((uni): uni is University => uni !== null)
   );
 
-  console.log(`Found ${universities.length} universities.`);
+  logger.info(`Found ${universities.length} universities.`);
   await popup.close();
   return universities;
 };
@@ -54,7 +51,7 @@ export const selectUniversity = async (
   page: Page,
   university: University
 ): Promise<void> => {
-  console.log(
+  logger.info(
     `🔍 Selecting university: ${university.name} (ID: ${university.id})`
   );
 
@@ -79,7 +76,7 @@ export const selectUniversity = async (
 };
 
 export const getYears = async (page: Page): Promise<string[]> => {
-  console.log(`📅 Getting available years...`);
+  logger.info(`📅 Getting available years...`);
   const years = await page.evaluate(() => {
     const yearSelect = document.querySelector('select[name="yil1"]');
     if (!yearSelect) return [];
@@ -92,86 +89,25 @@ export const getYears = async (page: Page): Promise<string[]> => {
   return years;
 };
 
-export const crawlUniversitiesByYear = async (
-  page: Page,
-  universities: University[],
-  config: CrawlerConfig
-): Promise<void> => {
-  console.log("🎓 Starting year-by-year crawl...");
-
-  // Get all unique years available across all universities
-  const allYearsSet = new Set<string>();
-
-  for (const university of universities) {
-    await selectUniversity(page, university);
-    const years = await getYears(page);
-    years.forEach((year) => allYearsSet.add(year));
-  }
-
-  // Convert to array and sort in descending order (newest first)
-  const allYears = Array.from(allYearsSet).sort(
-    (a, b) => parseInt(b) - parseInt(a)
-  );
-
-  // Process universities year by year, starting with the most recent
-  for (const year of allYears) {
-    console.log(`📅 Processing year ${year} for all universities...`);
-
-    for (const university of universities) {
-      try {
-        // Check if we've already crawled this combination
-        const filename = `${sanitizeFilename(
-          `${university.name}-${year}`
-        )}.html`;
-        const filepath = path.join(
-          getDownloadPath(config.downloadDir),
-          filename
-        );
-
-        try {
-          await fs.access(filepath);
-          console.log(
-            `Already crawled ${university.name} for year ${year}, skipping...`
-          );
-          continue;
-        } catch {
-          // File doesn't exist, proceed with crawling
-        }
-
-        await selectUniversity(page, university);
-        await crawlUniversity(page, university, year, config);
-      } catch (error) {
-        console.error(
-          `Error processing ${university.name} - Year: ${year}`,
-          error
-        );
-      }
-    }
-
-    // Optional: Add a small delay between years to prevent overwhelming the server
-    await sleep(1000);
-  }
-
-  console.log("🎉 Year-by-year crawl complete.");
-};
-
 export const crawlUniversity = async (
   page: Page,
   university: University,
   year: string,
   config: CrawlerConfig
 ): Promise<void> => {
-  console.log(`🎓 Crawling ${university.name} for year ${year}`);
+  logger.info(`🎓 Crawling ${university.name} for year ${year}`);
   try {
-    const html = await searchTheses(page, university, year);
+    const html = await safeSearchTheses(page, university, year);
     if (html) {
-      const filename = `${sanitizeFilename(`${university.name}-${year}`)}.html`;
+      const filename = `${sanitizeFilename(
+        `${university.name}-${university.id}-${year}`
+      )}.html`;
       const filepath = path.join(getDownloadPath(config.downloadDir), filename);
       await fs.writeFile(filepath, html);
       await markAsCrawled(university, year, config.progressFile);
     }
   } catch (error) {
-    console.error(`Error crawling ${university.name} for year ${year}`, error);
+    logger.error(`Error crawling ${university.name} for year ${year}`, error);
   }
 };
 
@@ -180,7 +116,7 @@ export const searchTheses = async (
   university: University,
   year: string
 ): Promise<string> => {
-  console.log(`🔎 Searching theses for ${university.name}, Year: ${year}`);
+  logger.info(`🔎 Searching theses for ${university.name}, Year: ${year}`);
   if (page.url() !== config.baseUrl) {
     await page.goto(config.baseUrl, {
       waitUntil: "domcontentloaded",
@@ -211,10 +147,61 @@ export const searchTheses = async (
     year
   );
 
-  await page.waitForNavigation({
-    waitUntil: "domcontentloaded",
-    timeout: 5000,
+  try {
+    await page.waitForNavigation({
+      waitUntil: "domcontentloaded",
+      timeout: 5000,
+    });
+  } catch (error) {
+    logger.error(
+      `Navigation failed for ${university.name}, Year: ${year}`,
+      error
+    );
+    throw error;
+  }
+
+  const isMaintenancePage = await page.evaluate(() => {
+    const bodyText = document.body.textContent || "";
+    return (
+      bodyText.includes("BAKIM CALISMASI") ||
+      bodyText.includes("undergoing maintenance")
+    );
   });
 
+  if (isMaintenancePage) {
+    logger.warn(
+      `⚠️ Maintenance page detected for ${university.name}, Year: ${year}. Retrying later...`
+    );
+    throw new Error("Maintenance page detected");
+  }
+
+  const cleanedText = await page.evaluate(() => {
+    const textContent = document.body.textContent || "";
+    return textContent
+      .replace(/\s+/g, " ") // Normalize whitespace
+      .replace(/\n/g, " ") // Replace newlines
+      .trim();
+  });
+
+  const match = cleanedText.match(/(\d+) kayıt/);
+  const recordCount = match ? parseInt(match[1], 10) : 0;
+  logger.info(`Found ${recordCount} records.`);
+
   return page.content();
+};
+
+export const safeSearchTheses = async (
+  page: Page,
+  university: University,
+  year: string,
+  retries = 5
+): Promise<string> => {
+  return pRetry(() => searchTheses(page, university, year), {
+    retries,
+    onFailedAttempt: (error) => {
+      logger.warn(
+        `Attempt ${error.attemptNumber} failed for ${university.name}, Year: ${year}. ${error.retriesLeft} retries left.`
+      );
+    },
+  });
 };

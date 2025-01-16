@@ -1,11 +1,12 @@
 import { promises as fs } from "node:fs";
 import * as puppeteer from "puppeteer";
-import { config } from "./config.js";
+import { config } from "./config";
 import { getUniversities, getYears, crawlUniversity } from "./crawler";
 import { getDownloadPath, isAlreadyCrawled } from "./utils";
+import { logger } from "./logger";
 
 const main = async () => {
-  console.log("Starting crawler...");
+  logger.info("Starting crawler...");
   try {
     // Create downloads directory
     await fs.mkdir(getDownloadPath(config.downloadDir), { recursive: true });
@@ -21,16 +22,22 @@ const main = async () => {
       const universities = await getUniversities(page);
       const years = await getYears(page);
 
-      for (const university of universities) {
-        for (const year of years) {
-          if (await isAlreadyCrawled(university, year, config.progressFile)) {
-            console.log(
-              `Skipping ${university.name} - ${year} (already crawled)`
-            );
+      // Loop through years first, then universities
+      for (const year of years) {
+        logger.info(`\n\n📅 Processing year ${year}\n`);
+
+        for (const university of universities) {
+          const isCrawled = await isAlreadyCrawled(
+            university,
+            year,
+            config.progressFile
+          );
+          if (isCrawled) {
+            logger.info(`\n⏭️ ${university.name} - Already crawled`);
             continue;
           }
 
-          console.log(`Crawling ${university.name} - ${year}...`);
+          logger.info(`\n🔄 ${university.name} - Crawling...`);
           await crawlUniversity(page, university, year, config);
         }
       }
@@ -38,7 +45,7 @@ const main = async () => {
       await browser.close();
     }
   } catch (error) {
-    console.error("Fatal error:", error);
+    logger.error("Fatal error:", error);
     process.exit(1);
   }
 };

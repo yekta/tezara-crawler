@@ -25,6 +25,7 @@ jspm_packages/
 
 downloads
 progress.txt
+logs-*.txt
 
 
 # dotenv environment variables file
