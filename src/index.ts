@@ -46,6 +46,7 @@ async function mainLoop() {
         await crawlUniversity(page, university, year, config);
       }
     }
+    logger.info("🚀🟢 Main loop completed successfully!");
   } catch (error) {
     logger.error("🚀🔴 Error in main loop:", error);
     if (browser) {
