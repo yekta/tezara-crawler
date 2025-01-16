@@ -23,6 +23,7 @@ const main = async () => {
 };
 
 async function mainLoop(browser: puppeteer.Browser) {
+  logger.info("🚀 Starting main loop...");
   try {
     const page = await browser.newPage();
     await page.goto(config.baseUrl);
@@ -50,7 +51,7 @@ async function mainLoop(browser: puppeteer.Browser) {
       }
     }
   } catch (error) {
-    logger.error("Error in main loop:", error);
+    logger.error("🚀🔴 Error in main loop:", error);
     await new Promise((resolve) => setTimeout(resolve, 5000));
     mainLoop(browser);
   }

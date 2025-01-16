@@ -96,19 +96,14 @@ export const crawlUniversity = async (
   config: CrawlerConfig
 ): Promise<void> => {
   logger.info(`🎓 Crawling ${university.name} for year ${year}`);
-  try {
-    const html = await safeSearchTheses(page, university, year);
-    if (html) {
-      const encodedUniversityName = encodeURIComponent(university.name);
-      const separator = "___";
-      const filename = `${encodedUniversityName}${separator}${university.id}${separator}${year}.html`;
-      const filepath = path.join(getPath(config.downloadDir), filename);
-      await fs.writeFile(filepath, html);
-      await markAsCrawled(university, year, config.progressFile);
-    }
-  } catch (error) {
-    logger.error(`Error crawling ${university.name} for year ${year}`, error);
-  }
+  const html = await safeSearchTheses(page, university, year);
+  if (!html) return;
+  const encodedUniversityName = encodeURIComponent(university.name);
+  const separator = "___";
+  const filename = `${encodedUniversityName}${separator}${university.id}${separator}${year}.html`;
+  const filepath = path.join(getPath(config.downloadDir), filename);
+  await fs.writeFile(filepath, html);
+  await markAsCrawled(university, year, config.progressFile);
 };
 
 export const searchTheses = async (
