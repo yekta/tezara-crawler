@@ -3,9 +3,9 @@ import path from "node:path";
 import pRetry from "p-retry";
 import type { Page } from "puppeteer";
 import { config } from "./config";
-import type { CrawlerConfig, University } from "./types";
-import { getPath, markAsCrawled, sanitizeFilename } from "./utils";
 import { logger } from "./logger";
+import type { CrawlerConfig, University } from "./types";
+import { getPath, markAsCrawled } from "./utils";
 
 export const getUniversities = async (page: Page): Promise<University[]> => {
   logger.info("🎓 Fetching list of universities...");
@@ -99,9 +99,9 @@ export const crawlUniversity = async (
   try {
     const html = await safeSearchTheses(page, university, year);
     if (html) {
-      const filename = `${sanitizeFilename(
-        `${university.name}-${university.id}-${year}`
-      )}.html`;
+      const encodedUniversityName = encodeURIComponent(university.name);
+      const separator = "___";
+      const filename = `${encodedUniversityName}${separator}${university.id}${separator}${year}.html`;
       const filepath = path.join(getPath(config.downloadDir), filename);
       await fs.writeFile(filepath, html);
       await markAsCrawled(university, year, config.progressFile);

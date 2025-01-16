@@ -9,9 +9,6 @@ const __dirname = path.dirname(__filename);
 export const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-export const sanitizeFilename = (filename: string): string =>
-  filename.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-
 export const getPath = (name: string): string =>
   path.join(path.dirname(__dirname), name);
 
