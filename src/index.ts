@@ -47,6 +47,8 @@ async function mainLoop() {
       }
     }
     logger.info("🚀🟢 Main loop completed successfully!");
+    // finish the process
+    process.exit(0);
   } catch (error) {
     logger.error("🚀🔴 Error in main loop:", error);
     if (browser) {
