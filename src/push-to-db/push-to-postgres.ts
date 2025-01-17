@@ -19,10 +19,11 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-// Initialize PostgreSQL connection
 const sql = postgres(DATABASE_URL, {
   max: 10,
   idle_timeout: 20,
+  connect_timeout: 30,
+  prepare: true,
 });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -31,195 +32,288 @@ const __dirname = dirname(__filename);
 const processedFilesPath = resolve(__dirname, "../../progress-postgres.txt");
 const folderPath = resolve(__dirname, "../../jsons-extended");
 
-// Function to get processed files
-function getProcessedFiles(): Set<string> {
-  if (!existsSync(processedFilesPath)) {
-    writeFileSync(processedFilesPath, "", "utf-8");
-  }
+if (!existsSync(processedFilesPath)) {
+  writeFileSync(processedFilesPath, "", "utf-8");
+}
+
+function getProcessedFiles() {
   const fileContents = readFileSync(processedFilesPath, "utf-8");
   return new Set(fileContents.split("\n").filter((line) => line.trim()));
 }
 
-// Function to log a processed file
-function logProcessedFile(fileName: string): void {
+function logProcessedFile(fileName) {
   appendFileSync(processedFilesPath, `${fileName}\n`, "utf-8");
 }
 
-// Function to insert data from a JSON file
-async function insertThesisData(filePath: string) {
+async function batchUpsertNames(transaction, tableName, names) {
+  const uniqueNames = [...new Set(names)].filter(Boolean);
+  if (uniqueNames.length === 0) return new Map();
+
+  const result = await transaction`
+    WITH input_values AS (
+      SELECT DISTINCT name, gen_random_uuid() as id
+      FROM unnest(${sql.array(uniqueNames)}::text[]) AS name
+    )
+    INSERT INTO ${sql(tableName)} (id, name)
+    SELECT id, name FROM input_values
+    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id, name
+  `;
+
+  return new Map(result.map((row) => [row.name, row.id]));
+}
+
+async function insertThesisData(filePath) {
   const data = JSON.parse(readFileSync(filePath, "utf-8"));
+  const batchSize = 50;
 
-  for (const thesis of data) {
-    try {
-      await sql.begin(async (transaction) => {
-        // Insert or fetch author with UUID
-        const [author] = await transaction`
-          WITH ins AS (
-            INSERT INTO authors (id, name)
-            VALUES (${randomUUID()}, ${thesis.name})
-            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-            RETURNING id, name
-          )
-          SELECT id, name FROM ins
-          UNION ALL
-          SELECT id, name FROM authors WHERE name = ${
-            thesis.name
-          } AND NOT EXISTS (SELECT 1 FROM ins)
-          LIMIT 1
-        `;
+  for (let i = 0; i < data.length; i += batchSize) {
+    const batch = data.slice(i, i + batchSize);
 
-        // Insert or fetch language with UUID
-        const [language] = await transaction`
-          WITH ins AS (
-            INSERT INTO languages (id, name)
-            VALUES (${randomUUID()}, ${thesis.language})
-            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-            RETURNING id, name
-          )
-          SELECT id, name FROM ins
-          UNION ALL
-          SELECT id, name FROM languages WHERE name = ${
-            thesis.language
-          } AND NOT EXISTS (SELECT 1 FROM ins)
-          LIMIT 1
-        `;
+    await sql.begin(async (transaction) => {
+      try {
+        const authors = batch.map((t) => t.name);
+        const languages = batch.map((t) => t.language);
+        const universities = batch.map((t) => t.university);
+        const advisors = batch.flatMap((t) => t.advisors || []);
+        const thesisTypes = batch.map((t) => t.thesis_type).filter(Boolean);
+        const departments = batch.map((t) => t.department).filter(Boolean);
+        const institutes = batch.map((t) => t.institute).filter(Boolean);
+        const branches = batch.map((t) => t.branch).filter(Boolean);
 
-        // Insert or fetch university with UUID
-        const [university] = await transaction`
-          WITH ins AS (
-            INSERT INTO universities (id, name)
-            VALUES (${randomUUID()}, ${thesis.university})
-            ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-            RETURNING id, name
-          )
-          SELECT id, name FROM ins
-          UNION ALL
-          SELECT id, name FROM universities WHERE name = ${
-            thesis.university
-          } AND NOT EXISTS (SELECT 1 FROM ins)
-          LIMIT 1
-        `;
+        const subjectsTurkish = batch.flatMap((t) => t.subjects_turkish || []);
+        const subjectsEnglish = batch.flatMap((t) => t.subjects_english || []);
+        const keywordsTurkish = batch.flatMap((t) => t.keywords_turkish || []);
+        const keywordsEnglish = batch.flatMap((t) => t.keywords_english || []);
 
-        // Insert thesis (using integer ID from the data)
-        const [thesisResult] = await transaction`
-          INSERT INTO theses (
-            id, author_id, language_id, title_original, title_translated, 
-            year, university_id, detail_id_1, detail_id_2, page_count
-          ) VALUES (
-            ${thesis.thesis_id}, ${author.id}, ${language.id}, 
-            ${thesis.title_original}, ${thesis.title_translated}, 
-            ${thesis.year}, ${university.id}, ${thesis.id_1}, 
-            ${thesis.id_2}, ${thesis.page_count || 0}
-          )
-          ON CONFLICT (id) DO NOTHING
-          RETURNING id
-        `;
+        const termUpserts = await Promise.all([
+          batchUpsertNames(transaction, "authors", authors),
+          batchUpsertNames(transaction, "languages", languages),
+          batchUpsertNames(transaction, "universities", universities),
+          batchUpsertNames(transaction, "advisors", advisors),
+          batchUpsertNames(transaction, "thesis_types", thesisTypes),
+          batchUpsertNames(transaction, "departments", departments),
+          batchUpsertNames(transaction, "institutes", institutes),
+          batchUpsertNames(transaction, "branches", branches),
+          batchUpsertNames(transaction, "subjects_turkish", subjectsTurkish),
+          batchUpsertNames(transaction, "subjects_english", subjectsEnglish),
+          batchUpsertNames(transaction, "keywords_turkish", keywordsTurkish),
+          batchUpsertNames(transaction, "keywords_english", keywordsEnglish),
+        ]);
 
-        if (!thesisResult?.id) {
-          console.log(`Thesis with id ${thesis.thesis_id} already exists`);
-          return;
+        const [
+          authorMap,
+          languageMap,
+          universityMap,
+          advisorMap,
+          thesisTypeMap,
+          departmentMap,
+          instituteMap,
+          branchMap,
+          subjectsTurkishMap,
+          subjectsEnglishMap,
+          keywordsTurkishMap,
+          keywordsEnglishMap,
+        ] = termUpserts;
+
+        const thesesValues = batch
+          .map((thesis) => ({
+            id: thesis.thesis_id,
+            author_id: authorMap.get(thesis.name),
+            language_id: languageMap.get(thesis.language),
+            title_original: thesis.title_original,
+            title_translated: thesis.title_translated,
+            abstract_original: thesis.abstract_original,
+            abstract_translated: thesis.abstract_translated,
+            year: thesis.year,
+            university_id: universityMap.get(thesis.university),
+            institute_id: instituteMap.get(thesis.institute) || null,
+            department_id: departmentMap.get(thesis.department) || null,
+            branch_id: branchMap.get(thesis.branch) || null,
+            thesis_type_id: thesisTypeMap.get(thesis.thesis_type) || null,
+            detail_id_1: thesis.id_1,
+            detail_id_2: thesis.id_2,
+            page_count: thesis.pages || 0,
+            pdf_url: thesis.pdf_url,
+          }))
+          .filter(
+            (thesis) =>
+              thesis.author_id && thesis.language_id && thesis.university_id
+          );
+
+        const uniqueThesesValues = Array.from(
+          new Map(thesesValues.map((t) => [t.id, t])).values()
+        );
+
+        if (uniqueThesesValues.length > 0) {
+          await transaction`
+            INSERT INTO theses (
+              id, author_id, language_id, title_original, title_translated,
+              abstract_original, abstract_translated, year, university_id,
+              institute_id, department_id, branch_id, thesis_type_id, detail_id_1,
+              detail_id_2, page_count, pdf_url
+            )
+            SELECT * FROM unnest(
+              ${sql.array(uniqueThesesValues.map((t) => t.id))}::integer[],
+              ${sql.array(uniqueThesesValues.map((t) => t.author_id))}::uuid[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.language_id)
+              )}::uuid[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.title_original)
+              )}::text[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.title_translated)
+              )}::text[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.abstract_original)
+              )}::text[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.abstract_translated)
+              )}::text[],
+              ${sql.array(uniqueThesesValues.map((t) => t.year))}::integer[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.university_id)
+              )}::uuid[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.institute_id || null)
+              )}::uuid[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.department_id || null)
+              )}::uuid[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.branch_id || null)
+              )}::uuid[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.thesis_type_id || null)
+              )}::uuid[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.detail_id_1)
+              )}::text[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.detail_id_2)
+              )}::text[],
+              ${sql.array(
+                uniqueThesesValues.map((t) => t.page_count)
+              )}::integer[],
+              ${sql.array(uniqueThesesValues.map((t) => t.pdf_url))}::text[]
+            ) AS t(
+              id, author_id, language_id, title_original, title_translated,
+              abstract_original, abstract_translated, year, university_id,
+              institute_id, department_id, branch_id, thesis_type_id, detail_id_1,
+              detail_id_2, page_count, pdf_url
+            )
+            ON CONFLICT (id) DO UPDATE SET
+              author_id = EXCLUDED.author_id,
+              language_id = EXCLUDED.language_id,
+              title_original = EXCLUDED.title_original,
+              title_translated = EXCLUDED.title_translated,
+              abstract_original = EXCLUDED.abstract_original,
+              abstract_translated = EXCLUDED.abstract_translated,
+              year = EXCLUDED.year,
+              university_id = EXCLUDED.university_id,
+              institute_id = EXCLUDED.institute_id,
+              department_id = EXCLUDED.department_id,
+              branch_id = EXCLUDED.branch_id,
+              thesis_type_id = EXCLUDED.thesis_type_id,
+              detail_id_1 = EXCLUDED.detail_id_1,
+              detail_id_2 = EXCLUDED.detail_id_2,
+              page_count = EXCLUDED.page_count,
+              pdf_url = EXCLUDED.pdf_url
+          `;
         }
 
-        // Insert subjects (Turkish) with UUID
-        if (thesis.subjects_turkish) {
-          for (const subject of thesis.subjects_turkish) {
-            const [subjectResult] = await transaction`
-              WITH ins AS (
-                INSERT INTO subjects_turkish (id, name)
-                VALUES (${randomUUID()}, ${subject})
-                ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-                RETURNING id, name
-              )
-              SELECT id, name FROM ins
-              UNION ALL
-              SELECT id, name FROM subjects_turkish WHERE name = ${subject} AND NOT EXISTS (SELECT 1 FROM ins)
-              LIMIT 1
-            `;
+        const insertRelations = async (tableName, values, idColumn) => {
+          if (values.length === 0) return;
+          const uniqueValues = Array.from(
+            new Map(
+              values.map((v) => [`${v.thesis_id}-${v[idColumn]}`, v])
+            ).values()
+          );
+          await transaction`
+            INSERT INTO ${sql(tableName)} (thesis_id, ${sql(idColumn)})
+            SELECT * FROM unnest(
+              ${sql.array(uniqueValues.map((v) => v.thesis_id))}::integer[],
+              ${sql.array(uniqueValues.map((v) => v[idColumn]))}::uuid[]
+            )
+            ON CONFLICT DO NOTHING
+          `;
+        };
 
-            await transaction`
-              INSERT INTO thesis_subjects_turkish (thesis_id, subject_id) 
-              VALUES (${thesisResult.id}, ${subjectResult.id})
-              ON CONFLICT DO NOTHING
-            `;
-          }
-        }
-
-        // Insert keywords (Turkish) with UUID
-        if (thesis.keywords_turkish) {
-          for (const keyword of thesis.keywords_turkish) {
-            const [keywordResult] = await transaction`
-              WITH ins AS (
-                INSERT INTO keywords_turkish (id, name)
-                VALUES (${randomUUID()}, ${keyword})
-                ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-                RETURNING id, name
-              )
-              SELECT id, name FROM ins
-              UNION ALL
-              SELECT id, name FROM keywords_turkish WHERE name = ${keyword} AND NOT EXISTS (SELECT 1 FROM ins)
-              LIMIT 1
-            `;
-
-            await transaction`
-              INSERT INTO thesis_keywords_turkish (thesis_id, keyword_id) 
-              VALUES (${thesisResult.id}, ${keywordResult.id})
-              ON CONFLICT DO NOTHING
-            `;
-          }
-        }
-
-        // Insert keywords (English) with UUID
-        if (thesis.keywords_english) {
-          for (const keyword of thesis.keywords_english) {
-            const [keywordResult] = await transaction`
-              WITH ins AS (
-                INSERT INTO keywords_english (id, name)
-                VALUES (${randomUUID()}, ${keyword})
-                ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-                RETURNING id, name
-              )
-              SELECT id, name FROM ins
-              UNION ALL
-              SELECT id, name FROM keywords_english WHERE name = ${keyword} AND NOT EXISTS (SELECT 1 FROM ins)
-              LIMIT 1
-            `;
-
-            await transaction`
-              INSERT INTO thesis_keywords_english (thesis_id, keyword_id) 
-              VALUES (${thesisResult.id}, ${keywordResult.id})
-              ON CONFLICT DO NOTHING
-            `;
-          }
-        }
-      });
-    } catch (err) {
-      console.error(`Error processing ${filePath}:`, err);
-    }
+        await Promise.all([
+          insertRelations(
+            "thesis_subjects_turkish",
+            batch.flatMap((thesis) =>
+              (thesis.subjects_turkish || []).map((subject) => ({
+                thesis_id: thesis.thesis_id,
+                subject_id: subjectsTurkishMap.get(subject),
+              }))
+            ),
+            "subject_id"
+          ),
+          insertRelations(
+            "thesis_subjects_english",
+            batch.flatMap((thesis) =>
+              (thesis.subjects_english || []).map((subject) => ({
+                thesis_id: thesis.thesis_id,
+                subject_id: subjectsEnglishMap.get(subject),
+              }))
+            ),
+            "subject_id"
+          ),
+          insertRelations(
+            "thesis_keywords_turkish",
+            batch.flatMap((thesis) =>
+              (thesis.keywords_turkish || []).map((keyword) => ({
+                thesis_id: thesis.thesis_id,
+                keyword_id: keywordsTurkishMap.get(keyword),
+              }))
+            ),
+            "keyword_id"
+          ),
+          insertRelations(
+            "thesis_keywords_english",
+            batch.flatMap((thesis) =>
+              (thesis.keywords_english || []).map((keyword) => ({
+                thesis_id: thesis.thesis_id,
+                keyword_id: keywordsEnglishMap.get(keyword),
+              }))
+            ),
+            "keyword_id"
+          ),
+        ]);
+      } catch (err) {
+        console.error(`Error processing batch in file ${filePath}:`, err);
+        throw err;
+      }
+    });
   }
 }
 
-// Main function
 async function main() {
-  const processedFiles = getProcessedFiles();
-  const files = readdirSync(folderPath);
+  try {
+    const processedFiles = getProcessedFiles();
+    const files = readdirSync(folderPath);
 
-  for (const file of files) {
-    if (extname(file) === ".json" && !processedFiles.has(file)) {
-      console.log(`Processing file: ${file}`);
-      try {
-        await insertThesisData(resolve(folderPath, file));
-        logProcessedFile(file);
-        console.log(`Successfully processed: ${file}`);
-      } catch (err) {
-        console.error(`Failed to process file: ${file}`, err);
+    for (const file of files) {
+      if (extname(file) === ".json" && !processedFiles.has(file)) {
+        console.log(`Processing file: ${file}`);
+        try {
+          await insertThesisData(resolve(folderPath, file));
+          logProcessedFile(file);
+          console.log(`Successfully processed: ${file}`);
+        } catch (err) {
+          console.error(`Failed to process file: ${file}`, err);
+        }
       }
-    } else {
-      console.log(`Skipping already processed file: ${file}`);
     }
-  }
 
-  console.log("Processing complete.");
-  await sql.end();
+    console.log("Processing complete.");
+  } catch (error) {
+    console.error("An error occurred during processing:", error);
+  } finally {
+    await sql.end();
+  }
 }
 
 main();
