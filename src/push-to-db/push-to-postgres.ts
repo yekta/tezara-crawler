@@ -49,6 +49,8 @@ async function batchUpsertNames(transaction, tableName, names) {
   const uniqueNames = [...new Set(names)].filter(Boolean);
   if (uniqueNames.length === 0) return new Map();
 
+  console.log(`Upserting ${uniqueNames.length} records into ${tableName}`);
+
   const result = await transaction`
     WITH input_values AS (
       SELECT DISTINCT name, gen_random_uuid() as id
@@ -60,6 +62,9 @@ async function batchUpsertNames(transaction, tableName, names) {
     RETURNING id, name
   `;
 
+  console.log(
+    `Successfully upserted ${result.length} records into ${tableName}`
+  );
   return new Map(result.map((row) => [row.name, row.id]));
 }
 
@@ -69,9 +74,15 @@ async function insertThesisData(filePath) {
 
   for (let i = 0; i < data.length; i += batchSize) {
     const batch = data.slice(i, i + batchSize);
+    console.log(
+      `Processing batch ${i / batchSize + 1} of ${Math.ceil(
+        data.length / batchSize
+      )}`
+    );
 
     await sql.begin(async (transaction) => {
       try {
+        // Extract all names and terms for batch upsert
         const authors = batch.map((t) => t.name);
         const languages = batch.map((t) => t.language);
         const universities = batch.map((t) => t.university);
@@ -86,7 +97,21 @@ async function insertThesisData(filePath) {
         const keywordsTurkish = batch.flatMap((t) => t.keywords_turkish || []);
         const keywordsEnglish = batch.flatMap((t) => t.keywords_english || []);
 
-        const termUpserts = await Promise.all([
+        // Batch upsert all entities and get their ID mappings
+        const [
+          authorMap,
+          languageMap,
+          universityMap,
+          advisorMap,
+          thesisTypeMap,
+          departmentMap,
+          instituteMap,
+          branchMap,
+          subjectsTurkishMap,
+          subjectsEnglishMap,
+          keywordsTurkishMap,
+          keywordsEnglishMap,
+        ] = await Promise.all([
           batchUpsertNames(transaction, "authors", authors),
           batchUpsertNames(transaction, "languages", languages),
           batchUpsertNames(transaction, "universities", universities),
@@ -101,51 +126,47 @@ async function insertThesisData(filePath) {
           batchUpsertNames(transaction, "keywords_english", keywordsEnglish),
         ]);
 
-        const [
-          authorMap,
-          languageMap,
-          universityMap,
-          advisorMap,
-          thesisTypeMap,
-          departmentMap,
-          instituteMap,
-          branchMap,
-          subjectsTurkishMap,
-          subjectsEnglishMap,
-          keywordsTurkishMap,
-          keywordsEnglishMap,
-        ] = termUpserts;
-
+        // Prepare thesis values with proper foreign key references
         const thesesValues = batch
-          .map((thesis) => ({
-            id: thesis.thesis_id,
-            author_id: authorMap.get(thesis.name),
-            language_id: languageMap.get(thesis.language),
-            title_original: thesis.title_original,
-            title_translated: thesis.title_translated,
-            abstract_original: thesis.abstract_original,
-            abstract_translated: thesis.abstract_translated,
-            year: thesis.year,
-            university_id: universityMap.get(thesis.university),
-            institute_id: instituteMap.get(thesis.institute) || null,
-            department_id: departmentMap.get(thesis.department) || null,
-            branch_id: branchMap.get(thesis.branch) || null,
-            thesis_type_id: thesisTypeMap.get(thesis.thesis_type) || null,
-            detail_id_1: thesis.id_1,
-            detail_id_2: thesis.id_2,
-            page_count: thesis.pages || 0,
-            pdf_url: thesis.pdf_url,
-          }))
+          .map((thesis) => {
+            const authorId = authorMap.get(thesis.name);
+            if (!authorId) {
+              console.warn(`No author ID found for name: ${thesis.name}`);
+            }
+
+            return {
+              id: thesis.thesis_id,
+              author_id: authorId,
+              language_id: languageMap.get(thesis.language),
+              title_original: thesis.title_original,
+              title_translated: thesis.title_translated,
+              abstract_original: thesis.abstract_original,
+              abstract_translated: thesis.abstract_translated,
+              year: thesis.year,
+              university_id: universityMap.get(thesis.university),
+              institute_id: instituteMap.get(thesis.institute) || null,
+              department_id: departmentMap.get(thesis.department) || null,
+              branch_id: branchMap.get(thesis.branch) || null,
+              thesis_type_id: thesisTypeMap.get(thesis.thesis_type) || null,
+              detail_id_1: thesis.id_1,
+              detail_id_2: thesis.id_2,
+              page_count: thesis.pages || 0,
+              pdf_url: thesis.pdf_url,
+            };
+          })
           .filter(
             (thesis) =>
               thesis.author_id && thesis.language_id && thesis.university_id
           );
+
+        console.log(`Prepared ${thesesValues.length} valid thesis entries`);
 
         const uniqueThesesValues = Array.from(
           new Map(thesesValues.map((t) => [t.id, t])).values()
         );
 
         if (uniqueThesesValues.length > 0) {
+          // Insert theses
           await transaction`
             INSERT INTO theses (
               id, author_id, language_id, title_original, title_translated,
@@ -223,13 +244,22 @@ async function insertThesisData(filePath) {
           `;
         }
 
+        // Function to insert relation records
         const insertRelations = async (tableName, values, idColumn) => {
           if (values.length === 0) return;
+
           const uniqueValues = Array.from(
             new Map(
               values.map((v) => [`${v.thesis_id}-${v[idColumn]}`, v])
             ).values()
+          ).filter((v) => v.thesis_id && v[idColumn]); // Ensure both IDs exist
+
+          if (uniqueValues.length === 0) return;
+
+          console.log(
+            `Inserting ${uniqueValues.length} relations into ${tableName}`
           );
+
           await transaction`
             INSERT INTO ${sql(tableName)} (thesis_id, ${sql(idColumn)})
             SELECT * FROM unnest(
@@ -240,7 +270,19 @@ async function insertThesisData(filePath) {
           `;
         };
 
+        // Insert all relations in parallel
         await Promise.all([
+          // Insert advisor relations
+          insertRelations(
+            "thesis_advisors",
+            batch.flatMap((thesis) =>
+              (thesis.advisors || []).map((advisor) => ({
+                thesis_id: thesis.thesis_id,
+                advisor_id: advisorMap.get(advisor),
+              }))
+            ),
+            "advisor_id"
+          ),
           insertRelations(
             "thesis_subjects_turkish",
             batch.flatMap((thesis) =>
@@ -282,6 +324,8 @@ async function insertThesisData(filePath) {
             "keyword_id"
           ),
         ]);
+
+        console.log(`Successfully processed batch of ${batch.length} theses`);
       } catch (err) {
         console.error(`Error processing batch in file ${filePath}:`, err);
         throw err;
