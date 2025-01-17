@@ -349,6 +349,8 @@ async function main() {
         } catch (err) {
           console.error(`Failed to process file: ${file}`, err);
         }
+      } else {
+        console.log(`Skipping already processed file: ${file}`);
       }
     }
 
