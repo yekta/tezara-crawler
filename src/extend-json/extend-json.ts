@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import fs from "fs";
 import { fileURLToPath } from "node:url";
 import path from "path";
+import crypto from "crypto";
 import {
   cleanText,
   extractAbstractAndKeywords,
@@ -196,61 +197,46 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
   return { ...extraFields, ...shapeThesis(thesis) };
 }
 
+function generateBatchHash(batch: Thesis[]): string {
+  const keys = batch
+    .map((thesis) => `${thesis.thesis_id}|||${thesis.id_1}|||${thesis.id_2}`)
+    .join("|||");
+  return crypto.createHash("md5").update(keys).digest("hex");
+}
+
 function writeBatchJSON(
   theses: ThesisExtended[],
   outputDir: string,
-  batchKey: string
+  batchHash: string
 ): void {
-  const outputFile = path.join(outputDir, `extended-${batchKey}.json`);
+  const outputFile = path.join(outputDir, `${batchHash}.json`);
   fs.writeFileSync(outputFile, JSON.stringify(theses, null, 2), {
     encoding: "utf-8",
   });
-  console.info(
-    `Batch ${batchKey} saved to: ${outputFile} - ${theses.length} records`
-  );
+  console.info(`Batch ${batchHash} saved - ${theses.length} records`);
+}
+
+function isBatchProcessed(outputDir: string, batchHash: string): boolean {
+  return fs.existsSync(path.join(outputDir, `${batchHash}.json`));
 }
 
 async function processBatchParallel(
-  batch: Thesis[],
-  processedIds: Set<string>
-): Promise<[ThesisExtended[], string[]]> {
-  const promises: Promise<{ thesis: ThesisExtended; key: string }>[] =
-    batch.map(async (item) => {
-      const key = `${item.thesis_id}|||${item.id_1}|||${item.id_2}`;
-      if (processedIds.has(key)) {
-        console.log(`Skipping already processed thesis: ${item.thesis_id}`);
-        const extended: ThesisExtended = {
-          ...extraFields,
-          ...shapeThesis(item),
-        };
-        return { thesis: extended, key: "" };
-      }
-      const result = await fetchThesisDetails(item);
-      return { thesis: result, key };
-    });
+  batch: Thesis[]
+): Promise<ThesisExtended[]> {
+  const promises: Promise<ThesisExtended>[] = batch.map(async (item) => {
+    return fetchThesisDetails(item);
+  });
 
-  const results = await Promise.all(promises);
-  const theses = results.map((r) => r.thesis);
-  const keys = results.map((r) => r.key).filter((k) => k !== "");
-  return [theses, keys];
+  return await Promise.all(promises);
 }
 
 async function main(batchSize = 500): Promise<void> {
   try {
-    const inputDir = path.join(__dirname, "..", "jsons");
-    const outputDir = path.join(__dirname, "..", "jsons-extended");
-    const progressFile = path.join(__dirname, "..", "extend-json-progress.txt");
+    const inputDir = path.join(__dirname, "..", "..", "jsons");
+    const outputDir = path.join(__dirname, "..", "..", "jsons-extended");
 
     if (!fs.existsSync(inputDir)) {
       throw new Error(`Directory not found: ${inputDir}`);
-    }
-
-    const processedIds = new Set<string>();
-    if (fs.existsSync(progressFile)) {
-      const processed = fs.readFileSync(progressFile, "utf-8").split("\n");
-      processed.forEach((id) => {
-        if (id.trim()) processedIds.add(id.trim());
-      });
     }
 
     const jsonFiles = fs
@@ -265,7 +251,7 @@ async function main(batchSize = 500): Promise<void> {
       allTheses.push(...data);
     }
 
-    console.info(`Loaded total of ${allTheses.length} thesis records.`);
+    console.info(`Loaded ${allTheses.length} thesis records from input.`);
 
     allTheses.sort((a, b) => {
       const aId = parseInt(a.thesis_id ?? "0", 10) || 0;
@@ -281,23 +267,19 @@ async function main(batchSize = 500): Promise<void> {
     while (startIndex < allTheses.length) {
       const endIndex = Math.min(startIndex + batchSize, allTheses.length);
       const currentBatch = allTheses.slice(startIndex, endIndex);
-      const batchKey = `${startIndex + 1}-${endIndex}`;
+      const batchHash = generateBatchHash(currentBatch);
 
       console.info(
         `Processing batch: ${startIndex + 1} - ${endIndex} of ${
           allTheses.length
-        } (parallel fetches: ${currentBatch.length})`
+        }  - ${batchHash}`
       );
 
-      const [batchResults, newKeys] = await processBatchParallel(
-        currentBatch,
-        processedIds
-      );
-      writeBatchJSON(batchResults, outputDir, batchKey);
-
-      if (newKeys.length > 0) {
-        fs.appendFileSync(progressFile, newKeys.join("\n") + "\n");
-        newKeys.forEach((key) => processedIds.add(key));
+      if (!isBatchProcessed(outputDir, batchHash)) {
+        const batchResults = await processBatchParallel(currentBatch);
+        writeBatchJSON(batchResults, outputDir, batchHash);
+      } else {
+        console.log(`Skipping already processed batch: ${batchHash}`);
       }
 
       startIndex = endIndex;
