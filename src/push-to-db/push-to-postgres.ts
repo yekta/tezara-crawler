@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { config } from "dotenv";
 import {
   appendFileSync,
   existsSync,
@@ -9,7 +9,7 @@ import {
 import { dirname, extname, resolve } from "path";
 import postgres from "postgres";
 import { fileURLToPath } from "url";
-import { config } from "dotenv";
+import { ThesisExtended } from "../types";
 
 config();
 
@@ -41,17 +41,21 @@ function getProcessedFiles() {
   return new Set(fileContents.split("\n").filter((line) => line.trim()));
 }
 
-function logProcessedFile(fileName) {
+function logProcessedFile(fileName: string) {
   appendFileSync(processedFilesPath, `${fileName}\n`, "utf-8");
 }
 
-async function batchUpsertNames(transaction, tableName, names) {
+async function batchUpsertNames(
+  transaction: any,
+  tableName: string,
+  names: any[]
+) {
   const uniqueNames = [...new Set(names)].filter(Boolean);
   if (uniqueNames.length === 0) return new Map();
 
   console.log(`Upserting ${uniqueNames.length} records into ${tableName}`);
 
-  const result = await transaction`
+  const result: { id: string; name: string }[] = await transaction`
     WITH input_values AS (
       SELECT DISTINCT name, gen_random_uuid() as id
       FROM unnest(${sql.array(uniqueNames)}::text[]) AS name
@@ -68,8 +72,8 @@ async function batchUpsertNames(transaction, tableName, names) {
   return new Map(result.map((row) => [row.name, row.id]));
 }
 
-async function insertThesisData(filePath) {
-  const data = JSON.parse(readFileSync(filePath, "utf-8"));
+async function insertThesisData(filePath: string) {
+  const data: ThesisExtended[] = JSON.parse(readFileSync(filePath, "utf-8"));
   const batchSize = 50;
 
   for (let i = 0; i < data.length; i += batchSize) {
@@ -245,7 +249,11 @@ async function insertThesisData(filePath) {
         }
 
         // Function to insert relation records
-        const insertRelations = async (tableName, values, idColumn) => {
+        const insertRelations = async (
+          tableName: string,
+          values: any[],
+          idColumn: any
+        ) => {
           if (values.length === 0) return;
 
           const uniqueValues = Array.from(

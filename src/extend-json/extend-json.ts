@@ -8,9 +8,8 @@ import {
   extractAbstractAndKeywords,
   parseLocationInfo,
   shapeThesis,
-  Thesis,
-  ThesisExtended,
 } from "./helpers";
+import { Thesis, ThesisExtended } from "../types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
