@@ -261,7 +261,6 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
     try {
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
       const response = await fetch(detailsUrl);
-      console.log(`Fetching: ${detailsUrl} => status: ${response.status}`);
 
       if (response.ok) {
         const htmlContent = await response.text();
@@ -311,7 +310,9 @@ function writeBatchJSON(
   fs.writeFileSync(outputFile, JSON.stringify(theses, null, 2), {
     encoding: "utf-8",
   });
-  console.info(`Batch saved to: ${outputFile}`);
+  console.info(
+    `Batch ${batchKey} saved to: ${outputFile} - ${theses.length} records`
+  );
 }
 
 async function processBatchParallel(
