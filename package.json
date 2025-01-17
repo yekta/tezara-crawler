@@ -11,12 +11,15 @@
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "parse": "tsx src/parse-as-json.ts",
+    "extend": "tsx src/extend-json.ts",
     "type-check": "tsc"
   },
   "dependencies": {
     "acorn": "^8.14.0",
     "acorn-walk": "^8.3.4",
     "cheerio": "^1.0.0",
+    "html-entities": "^2.5.2",
+    "htmlparser2": "^10.0.0",
     "jsdom": "^26.0.0",
     "p-retry": "^6.2.1",
     "puppeteer": "^24.1.0",

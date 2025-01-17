@@ -8,7 +8,6 @@ import { simple as walk } from "acorn-walk";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// We'll store parse-error filenames in this array
 const parseErrors: string[] = [];
 
 // Convert AST ObjectExpression to JSON
@@ -119,7 +118,7 @@ const processFile = (filePath: string, outputDir: string) => {
       return;
     }
 
-    // If no "var doc" found, skip writing JSON
+    // If no "var doc" found, skip writi ng JSON
     if (extractedDocs.length === 0) {
       console.log(`No "var doc" found in ${filePath}, skipping.`);
       // Clean up
@@ -247,7 +246,7 @@ function transformDoc(originalDoc: any) {
     id_1,
     id_2,
     name: originalDoc.name,
-    year: originalDoc.age, // was "age"
+    year: originalDoc.age,
     title_original,
     title_translated,
     university: originalDoc.uni,
