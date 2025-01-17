@@ -10,8 +10,8 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
-    "parse": "tsx src/parse-as-json.ts",
-    "extend": "tsx src/extend-json.ts",
+    "parse": "tsx src/parse-as-json/parse-as-json.ts",
+    "extend": "tsx src/extend-json/extend-json.ts",
     "type-check": "tsc"
   },
   "dependencies": {
