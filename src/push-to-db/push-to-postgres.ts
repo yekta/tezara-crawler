@@ -1,4 +1,6 @@
 import { config } from "dotenv";
+config();
+
 import {
   appendFileSync,
   existsSync,
@@ -10,8 +12,6 @@ import { dirname, extname, resolve } from "path";
 import postgres from "postgres";
 import { fileURLToPath } from "url";
 import { ThesisExtended } from "../types";
-
-config();
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
