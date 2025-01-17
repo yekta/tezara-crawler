@@ -38,6 +38,17 @@ async function main() {
   });
   const res = await client.createIndex(thesesIndex, { primaryKey: "id" });
   console.log(res);
+  const index = client.index(thesesIndex);
+  const filterableRes = await index.updateFilterableAttributes([
+    "year",
+    "thesis_type",
+    "university",
+    "institute",
+    "department",
+    "branch",
+    "language",
+  ]);
+  console.log(filterableRes);
 
   const processedFiles = getProcessedFiles();
   const files = readdirSync(folderPath);
