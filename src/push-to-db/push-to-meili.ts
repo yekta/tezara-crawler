@@ -35,6 +35,7 @@ const indexes: Record<
   TIndex,
   {
     filterable?: string[];
+    sortable?: string[];
     shape: (doc: ThesisExtended) => null | undefined | any | any[];
     bulk?: boolean;
   }
@@ -49,6 +50,7 @@ const indexes: Record<
       "branch",
       "language",
     ],
+    sortable: ["id", "year"],
     shape: (doc) => {
       const { thesis_id, id_1, id_2, tez_no, status, name, ...rest } = doc;
       return {
@@ -61,6 +63,7 @@ const indexes: Record<
     },
   },
   universities: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.university
         ? { name: doc.university, id: md5Hash(doc.university) }
@@ -68,6 +71,7 @@ const indexes: Record<
     bulk: true,
   },
   institutes: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.institute
         ? { name: doc.institute, id: md5Hash(doc.institute) }
@@ -75,6 +79,7 @@ const indexes: Record<
     bulk: true,
   },
   departments: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.department
         ? { name: doc.department, id: md5Hash(doc.department) }
@@ -82,16 +87,19 @@ const indexes: Record<
     bulk: true,
   },
   branches: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.branch ? { name: doc.branch, id: md5Hash(doc.branch) } : null,
     bulk: true,
   },
   languages: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.language ? { name: doc.language, id: md5Hash(doc.language) } : null,
     bulk: true,
   },
   thesis_types: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.thesis_type
         ? { name: doc.thesis_type, id: md5Hash(doc.thesis_type) }
@@ -99,6 +107,7 @@ const indexes: Record<
     bulk: true,
   },
   subjects_turkish: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.subjects_turkish
         ?.filter((i) => i)
@@ -106,6 +115,7 @@ const indexes: Record<
     bulk: true,
   },
   subjects_english: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.subjects_english
         ?.filter((i) => i)
@@ -113,22 +123,26 @@ const indexes: Record<
     bulk: true,
   },
   authors: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.name ? { name: doc.name, id: md5Hash(doc.name) } : null,
   },
   advisors: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.advisors
         ?.filter((i) => i)
         .map((name) => ({ name, id: md5Hash(name) })),
   },
   keywords_turkish: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.keywords_turkish
         ?.filter((i) => i)
         .map((name) => ({ name, id: md5Hash(name) })),
   },
   keywords_english: {
+    sortable: ["name"],
     shape: (doc) =>
       doc.keywords_english
         ?.filter((i) => i)
@@ -158,6 +172,17 @@ async function main() {
       );
       const filterableRes = await index.updateFilterableAttributes(filterables);
       console.log(filterableRes);
+    }
+
+    const sortables = indexes[typedIndex].sortable;
+    if (sortables) {
+      const index = client.index(indexName);
+      console.log(
+        `Index: ${typedIndex} | Updating sortable attributes`,
+        sortables
+      );
+      const sortableRes = await index.updateSortableAttributes(sortables);
+      console.log(sortableRes);
     }
   }
 
