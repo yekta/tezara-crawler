@@ -12,6 +12,8 @@ import {
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ThesisExtended } from "../types";
+import { TIndex } from "./types";
+import { createHash } from "crypto";
 
 const host = process.env.MEILI_HOST || "";
 const apiKey = process.env.MEILI_API_KEY || "";
@@ -29,57 +31,25 @@ if (!existsSync(processedFilesPath)) {
   writeFileSync(processedFilesPath, "", "utf-8");
 }
 
-const thesesIndex = "theses";
-
-async function main() {
-  const client = new MeiliSearch({
-    host,
-    apiKey,
-  });
-  const res = await client.createIndex(thesesIndex, { primaryKey: "id" });
-  console.log(res);
-  const index = client.index(thesesIndex);
-  const filterableRes = await index.updateFilterableAttributes([
-    "year",
-    "thesis_type",
-    "university",
-    "institute",
-    "department",
-    "branch",
-    "language",
-  ]);
-  console.log(filterableRes);
-
-  const processedFiles = getProcessedFiles();
-  const files = readdirSync(folderPath);
-
-  for (const file of files) {
-    if (extname(file) === ".json" && !processedFiles.has(file)) {
-      console.log(`Processing file: ${file}`);
-      try {
-        await processFile(file, client);
-        logProcessedFile(file);
-      } catch (error) {
-        console.error(`Error processing file: ${file}`);
-        console.error(error);
-      }
-    } else {
-      console.log(`Skipping already processed file: ${file}`);
-    }
+const indexes: Record<
+  TIndex,
+  {
+    filterable?: string[];
+    shape: (doc: ThesisExtended) => null | undefined | any | any[];
+    bulk?: boolean;
   }
-
-  console.log("Processing complete.");
-}
-
-main();
-
-async function processFile(fileName: string, client: MeiliSearch) {
-  const fileContents = readFileSync(resolve(folderPath, fileName), "utf-8");
-  const data: ThesisExtended[] = JSON.parse(fileContents);
-
-  const index = client.index(thesesIndex);
-  const res = await index.addDocuments(
-    data.map((doc) => {
+> = {
+  theses: {
+    filterable: [
+      "year",
+      "thesis_type",
+      "university",
+      "institute",
+      "department",
+      "branch",
+      "language",
+    ],
+    shape: (doc) => {
       const { thesis_id, id_1, id_2, tez_no, status, name, ...rest } = doc;
       return {
         id: thesis_id,
@@ -88,18 +58,200 @@ async function processFile(fileName: string, client: MeiliSearch) {
         author: name,
         ...rest,
       };
-    })
-  );
+    },
+  },
+  universities: {
+    shape: (doc) =>
+      doc.university
+        ? { name: doc.university, id: md5Hash(doc.university) }
+        : null,
+    bulk: true,
+  },
+  institutes: {
+    shape: (doc) =>
+      doc.institute
+        ? { name: doc.institute, id: md5Hash(doc.institute) }
+        : null,
+    bulk: true,
+  },
+  departments: {
+    shape: (doc) =>
+      doc.department
+        ? { name: doc.department, id: md5Hash(doc.department) }
+        : null,
+    bulk: true,
+  },
+  branches: {
+    shape: (doc) =>
+      doc.branch ? { name: doc.branch, id: md5Hash(doc.branch) } : null,
+    bulk: true,
+  },
+  languages: {
+    shape: (doc) =>
+      doc.language ? { name: doc.language, id: md5Hash(doc.language) } : null,
+    bulk: true,
+  },
+  thesis_types: {
+    shape: (doc) =>
+      doc.thesis_type
+        ? { name: doc.thesis_type, id: md5Hash(doc.thesis_type) }
+        : null,
+    bulk: true,
+  },
+  subjects_turkish: {
+    shape: (doc) =>
+      doc.subjects_turkish
+        ?.filter((i) => i)
+        .map((name) => ({ name, id: md5Hash(name) })),
+    bulk: true,
+  },
+  subjects_english: {
+    shape: (doc) =>
+      doc.subjects_english
+        ?.filter((i) => i)
+        .map((name) => ({ name, id: md5Hash(name) })),
+    bulk: true,
+  },
+  authors: {
+    shape: (doc) =>
+      doc.name ? { name: doc.name, id: md5Hash(doc.name) } : null,
+  },
+  advisors: {
+    shape: (doc) =>
+      doc.advisors
+        ?.filter((i) => i)
+        .map((name) => ({ name, id: md5Hash(name) })),
+  },
+  keywords_turkish: {
+    shape: (doc) =>
+      doc.keywords_turkish
+        ?.filter((i) => i)
+        .map((name) => ({ name, id: md5Hash(name) })),
+  },
+  keywords_english: {
+    shape: (doc) =>
+      doc.keywords_english
+        ?.filter((i) => i)
+        .map((name) => ({ name, id: md5Hash(name) })),
+  },
+} as const;
+
+async function main() {
+  const client = new MeiliSearch({
+    host,
+    apiKey,
+  });
+
+  for (const indexName in indexes) {
+    const typedIndex = indexName as TIndex;
+    const res = await client.createIndex(indexName, {
+      primaryKey: "id",
+    });
+    console.log(res);
+
+    const filterables = indexes[typedIndex].filterable;
+    if (filterables) {
+      const index = client.index(indexName);
+      console.log(
+        `Index: ${typedIndex} | Updating filterable attributes`,
+        filterables
+      );
+      const filterableRes = await index.updateFilterableAttributes(filterables);
+      console.log(filterableRes);
+    }
+  }
+
+  for (const indexName in indexes) {
+    const typedIndex = indexName as TIndex;
+    const shape = indexes[typedIndex].shape;
+    const processedFiles = getProcessedFiles(typedIndex);
+    const files = readdirSync(folderPath);
+
+    for (const file of files) {
+      if (
+        extname(file) === ".json" &&
+        !processedFiles.has(`${typedIndex}|||${file}`)
+      ) {
+        console.log(`Index: ${typedIndex} | Processing file: ${file}`);
+        try {
+          await processFile(file, client, typedIndex, shape);
+          logProcessedFile(file, typedIndex);
+        } catch (error) {
+          console.error(
+            `Index: ${typedIndex} | Error processing file: ${file}`
+          );
+          console.error(error);
+        }
+      } else {
+        console.log(
+          `Index: ${typedIndex} | Skipping already processed file: ${file}`
+        );
+      }
+    }
+
+    console.log(`✅ Index: ${typedIndex} | Done processing all files.`);
+  }
+
+  console.log("✅✅✅ Processing complete. ✅✅✅");
+}
+
+main();
+
+async function processFile(
+  fileName: string,
+  client: MeiliSearch,
+  indexName: TIndex,
+  shape: (doc: ThesisExtended) => any
+) {
+  const fileContents = readFileSync(resolve(folderPath, fileName), "utf-8");
+  const data: ThesisExtended[] = JSON.parse(fileContents);
+
+  const index = client.index(indexName);
+  const mappedData = data
+    .map(shape)
+    .filter((d) => d !== undefined && d !== null);
+  let flatData: any[] = [];
+
+  mappedData.forEach((d) => {
+    if (Array.isArray(d)) {
+      flatData.push(...d);
+    } else {
+      flatData.push(d);
+    }
+  });
+
+  const finalData = flatData.filter((d) => d !== undefined && d !== null);
+  const finalMap = new Map<string, any>();
+  finalData.forEach((d) => {
+    finalMap.set(d.id, d);
+  });
+  const finalDataArray = Array.from(finalMap.values());
+
+  const res = await index.addDocuments(finalDataArray);
+
   console.log(res);
-  console.log(`Added ${data.length} documents to index: ${thesesIndex}`);
+  console.log(
+    `Index: ${indexName} | ${indexName} Added ${finalDataArray.length} documents to index: ${indexName}`
+  );
 }
 
-function getProcessedFiles() {
+function getProcessedFiles(key: TIndex) {
   const fileContents = readFileSync(processedFilesPath, "utf-8");
-  return new Set(fileContents.split("\n").filter((line) => line.trim()));
+  return new Set(
+    fileContents
+      .split("\n")
+      .filter((line) => line.trim())
+      .filter((line) => line.startsWith(`${key}|||`))
+  );
 }
 
-function logProcessedFile(fileName: string) {
-  appendFileSync(processedFilesPath, `${fileName}\n`, "utf-8");
-  console.log(`Logged processed file: ${fileName}`);
+function logProcessedFile(fileName: string, index: TIndex) {
+  const adjustedFileName = `${index}|||${fileName}`;
+
+  appendFileSync(processedFilesPath, `${adjustedFileName}\n`, "utf-8");
+  console.log(`Index: ${index} | Logged processed file: ${adjustedFileName}`);
+}
+
+function md5Hash(data: string) {
+  return createHash("md5").update(data).digest("hex");
 }
