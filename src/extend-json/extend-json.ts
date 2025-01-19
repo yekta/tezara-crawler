@@ -3,6 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { fileURLToPath } from "node:url";
 import path from "path";
+import { cleanAdvisors, cleanUniversity } from "../helpers";
 import { Thesis, ThesisExtended } from "../types";
 import {
   cleanText,
@@ -10,7 +11,6 @@ import {
   parseLocationInfo,
   shapeThesis,
 } from "./helpers";
-import { cleanAdvisors, cleanUniversity } from "../helpers";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

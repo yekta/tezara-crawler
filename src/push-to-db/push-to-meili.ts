@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 config();
 
+import { createHash } from "crypto";
 import { MeiliSearch } from "meilisearch";
 import {
   appendFileSync,
@@ -11,10 +12,9 @@ import {
 } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cleanAdvisors, cleanUniversity } from "../helpers";
 import { ThesisExtended } from "../types";
 import { TIndex } from "./types";
-import { createHash } from "crypto";
-import { cleanAdvisors, cleanUniversity } from "../helpers";
 
 const host = process.env.MEILI_HOST || "";
 const apiKey = process.env.MEILI_API_KEY || "";

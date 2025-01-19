@@ -1,9 +1,9 @@
+import { parse as acornParse } from "acorn";
+import { simple as walk } from "acorn-walk";
+import * as cheerio from "cheerio";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import * as cheerio from "cheerio";
-import { parse as acornParse } from "acorn";
-import { simple as walk } from "acorn-walk";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
