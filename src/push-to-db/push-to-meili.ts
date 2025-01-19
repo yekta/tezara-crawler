@@ -52,6 +52,12 @@ const indexes: Record<
       "department",
       "branch",
       "language",
+      "advisors",
+      "authors",
+      "keywords_turkish",
+      "keywords_english",
+      "subjects_turkish",
+      "subjects_english",
     ],
     sortable: ["id", "year"],
     shape: (doc) => {
@@ -80,6 +86,7 @@ const indexes: Record<
   universities: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.university
         ? { name: doc.university, id: md5Hash(doc.university) }
@@ -89,6 +96,7 @@ const indexes: Record<
   institutes: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.institute
         ? { name: doc.institute, id: md5Hash(doc.institute) }
@@ -98,6 +106,7 @@ const indexes: Record<
   departments: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.department
         ? { name: doc.department, id: md5Hash(doc.department) }
@@ -107,6 +116,7 @@ const indexes: Record<
   branches: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.branch ? { name: doc.branch, id: md5Hash(doc.branch) } : null,
     bulk: true,
@@ -114,6 +124,7 @@ const indexes: Record<
   languages: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.language ? { name: doc.language, id: md5Hash(doc.language) } : null,
     bulk: true,
@@ -121,6 +132,7 @@ const indexes: Record<
   thesis_types: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.thesis_type
         ? { name: doc.thesis_type, id: md5Hash(doc.thesis_type) }
@@ -130,6 +142,7 @@ const indexes: Record<
   subjects_turkish: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.subjects_turkish
         ?.filter((i) => i)
@@ -139,6 +152,7 @@ const indexes: Record<
   subjects_english: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.subjects_english
         ?.filter((i) => i)
@@ -148,12 +162,14 @@ const indexes: Record<
   authors: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.name ? { name: doc.name, id: md5Hash(doc.name) } : null,
   },
   advisors: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.advisors
         ?.filter((i) => i)
@@ -162,6 +178,7 @@ const indexes: Record<
   keywords_turkish: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.keywords_turkish
         ?.filter((i) => i)
@@ -170,6 +187,7 @@ const indexes: Record<
   keywords_english: {
     maxTotalHits: 5_000,
     sortable: ["name"],
+    filterable: ["name"],
     shape: (doc) =>
       doc.keywords_english
         ?.filter((i) => i)
