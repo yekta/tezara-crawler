@@ -38,9 +38,11 @@ const indexes: Record<
     sortable?: string[];
     shape: (doc: ThesisExtended) => null | undefined | any | any[];
     bulk?: boolean;
+    maxTotalHits: number;
   }
 > = {
   theses: {
+    maxTotalHits: 20_000,
     filterable: [
       "year",
       "thesis_type",
@@ -63,6 +65,7 @@ const indexes: Record<
     },
   },
   universities: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.university
@@ -71,6 +74,7 @@ const indexes: Record<
     bulk: true,
   },
   institutes: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.institute
@@ -79,6 +83,7 @@ const indexes: Record<
     bulk: true,
   },
   departments: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.department
@@ -87,18 +92,21 @@ const indexes: Record<
     bulk: true,
   },
   branches: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.branch ? { name: doc.branch, id: md5Hash(doc.branch) } : null,
     bulk: true,
   },
   languages: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.language ? { name: doc.language, id: md5Hash(doc.language) } : null,
     bulk: true,
   },
   thesis_types: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.thesis_type
@@ -107,6 +115,7 @@ const indexes: Record<
     bulk: true,
   },
   subjects_turkish: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.subjects_turkish
@@ -115,6 +124,7 @@ const indexes: Record<
     bulk: true,
   },
   subjects_english: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.subjects_english
@@ -123,11 +133,13 @@ const indexes: Record<
     bulk: true,
   },
   authors: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.name ? { name: doc.name, id: md5Hash(doc.name) } : null,
   },
   advisors: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.advisors
@@ -135,6 +147,7 @@ const indexes: Record<
         .map((name) => ({ name, id: md5Hash(name) })),
   },
   keywords_turkish: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.keywords_turkish
@@ -142,6 +155,7 @@ const indexes: Record<
         .map((name) => ({ name, id: md5Hash(name) })),
   },
   keywords_english: {
+    maxTotalHits: 5_000,
     sortable: ["name"],
     shape: (doc) =>
       doc.keywords_english
@@ -184,6 +198,18 @@ async function main() {
       const sortableRes = await index.updateSortableAttributes(sortables);
       console.log(sortableRes);
     }
+
+    const maxTotalHits = indexes[typedIndex].maxTotalHits;
+    const index = client.index(indexName);
+    console.log(
+      `Index: ${typedIndex} | Updating maxTotalHits to ${maxTotalHits}`
+    );
+    const maxTotalHitsRes = await index.updateSettings({
+      pagination: {
+        maxTotalHits,
+      },
+    });
+    console.log(maxTotalHitsRes);
   }
 
   for (const indexName in indexes) {
