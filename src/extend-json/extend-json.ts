@@ -3,13 +3,14 @@ import crypto from "crypto";
 import fs from "fs";
 import { fileURLToPath } from "node:url";
 import path from "path";
+import { Thesis, ThesisExtended } from "../types";
 import {
   cleanText,
+  cleanUniversity,
   extractAbstractAndKeywords,
   parseLocationInfo,
   shapeThesis,
 } from "./helpers";
-import { Thesis, ThesisExtended } from "../types";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,7 +81,8 @@ function parseThesisExtended(htmlContent: string): ThesisExtended {
       const advisors = advisorMatch[1]
         .split(";")
         .map((advisor) => cleanText(advisor))
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter((i) => !i.includes("Yer Bilgisi:"));
       result.advisors = advisors.length > 0 ? advisors : null;
     }
 
@@ -89,7 +91,7 @@ function parseThesisExtended(htmlContent: string): ThesisExtended {
       const { university, institute, department, branch } = parseLocationInfo(
         locationMatch[1]
       );
-      result.university = university;
+      result.university = cleanUniversity(university);
       result.institute = institute;
       result.department = department;
       result.branch = branch;

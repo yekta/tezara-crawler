@@ -86,5 +86,13 @@ export function shapeThesis(thesis: Thesis) {
     ...thesis,
     thesis_id: id !== undefined && id !== null ? Number(id) : null,
     year: year !== undefined && year !== null ? Number(year) : null,
+    university: cleanUniversity(thesis.university),
   };
+}
+
+export function cleanUniversity(
+  university: string | null | undefined
+): string | null {
+  if (!university) return null;
+  return university.startsWith(",") ? university.slice(1) : university;
 }
