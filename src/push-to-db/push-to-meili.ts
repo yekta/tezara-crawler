@@ -42,7 +42,7 @@ const indexes: Record<
   }
 > = {
   theses: {
-    maxTotalHits: 20_000,
+    maxTotalHits: 1_500_000,
     filterable: [
       "year",
       "thesis_type",
