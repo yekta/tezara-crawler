@@ -6,11 +6,11 @@ import path from "path";
 import { Thesis, ThesisExtended } from "../types";
 import {
   cleanText,
-  cleanUniversity,
   extractAbstractAndKeywords,
   parseLocationInfo,
   shapeThesis,
 } from "./helpers";
+import { cleanAdvisors, cleanUniversity } from "../helpers";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,12 +78,13 @@ function parseThesisExtended(htmlContent: string): ThesisExtended {
 
     const advisorMatch = infoText.match(/Danışman:\s*([^\n]+)/i);
     if (advisorMatch) {
-      const advisors = advisorMatch[1]
-        .split(";")
-        .map((advisor) => cleanText(advisor))
-        .filter(Boolean)
-        .filter((i) => !i.includes("Yer Bilgisi:"));
-      result.advisors = advisors.length > 0 ? advisors : null;
+      const advisors = cleanAdvisors(
+        advisorMatch[1]
+          .split(";")
+          .map((advisor) => cleanText(advisor))
+          .filter(Boolean)
+      );
+      result.advisors = advisors && advisors.length > 0 ? advisors : null;
     }
 
     const locationMatch = infoText.match(/Yer Bilgisi:\s*([^\n]+)/i);

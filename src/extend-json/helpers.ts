@@ -1,3 +1,4 @@
+import { cleanUniversity } from "../helpers";
 import { Thesis } from "../types";
 
 export function cleanText(value: string | null | undefined): string {
@@ -88,11 +89,4 @@ export function shapeThesis(thesis: Thesis) {
     year: year !== undefined && year !== null ? Number(year) : null,
     university: cleanUniversity(thesis.university),
   };
-}
-
-export function cleanUniversity(
-  university: string | null | undefined
-): string | null {
-  if (!university) return null;
-  return university.startsWith(",") ? university.slice(1) : university;
 }

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { ThesisExtended } from "../types";
 import { TIndex } from "./types";
 import { createHash } from "crypto";
+import { cleanAdvisors, cleanUniversity } from "../helpers";
 
 const host = process.env.MEILI_HOST || "";
 const apiKey = process.env.MEILI_API_KEY || "";
@@ -54,12 +55,24 @@ const indexes: Record<
     ],
     sortable: ["id", "year"],
     shape: (doc) => {
-      const { thesis_id, id_1, id_2, tez_no, status, name, ...rest } = doc;
+      const {
+        thesis_id,
+        id_1,
+        id_2,
+        tez_no,
+        status,
+        university,
+        name,
+        advisors,
+        ...rest
+      } = doc;
       return {
         id: thesis_id,
         detail_id_1: id_1,
         detail_id_2: id_2,
         author: name,
+        university: cleanUniversity(university),
+        advisors: cleanAdvisors(advisors),
         ...rest,
       };
     },
