@@ -53,7 +53,7 @@ const indexes: Record<
       "branch",
       "language",
       "advisors",
-      "authors",
+      "author",
       "keywords_turkish",
       "keywords_english",
       "subjects_turkish",
