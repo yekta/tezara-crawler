@@ -22,6 +22,7 @@ async function main(batchSize = 100): Promise<void> {
     console.log(`Found ${jsonFiles.length} JSON files in input.`);
 
     let processedFileCount = 0;
+    let grandTotalProblems = 0;
 
     for (let i = 0; i < jsonFiles.length; i += batchSize) {
       console.log(
@@ -29,12 +30,12 @@ async function main(batchSize = 100): Promise<void> {
           i + batchSize
         ).toLocaleString()}`
       );
-      const { fileCount } = processBatch(
-        i,
+      const { fileCount, totalProblems } = processBatch(
         jsonFiles.slice(i, i + batchSize),
         inputDir,
         outputDir
       );
+      grandTotalProblems += totalProblems;
       processedFileCount += fileCount;
       console.log(
         `Finished processing batch: ${i.toLocaleString()}-${(
@@ -44,7 +45,10 @@ async function main(batchSize = 100): Promise<void> {
     }
 
     console.info(
-      `🟢 Processed ${processedFileCount.toLocaleString()} thesis records from input.`
+      `\n\n\n🟢 Processed ${processedFileCount.toLocaleString()} thesis records from input.`
+    );
+    console.log(
+      `🟢 Total problems fixed: ${grandTotalProblems.toLocaleString()}`
     );
 
     console.info(
@@ -55,24 +59,67 @@ async function main(batchSize = 100): Promise<void> {
   }
 }
 
-function processBatch(
-  i: number,
-  files: string[],
-  inputDir: string,
-  outputDir: string
-) {
-  let allTheses: ThesisExtended[] = [];
+function processBatch(files: string[], inputDir: string, outputDir: string) {
+  const allTheses: ThesisExtended[] = [];
+  let totalProblems = 0;
   for (const file of files) {
     const filePath = path.join(inputDir, file);
     const rawData = fs.readFileSync(filePath, "utf-8");
     const data: ThesisExtended[] = JSON.parse(rawData);
     allTheses.push(...data);
   }
+  for (let i = 0; i < allTheses.length; i++) {
+    const { thesis, problemsCount } = cleanThesis(allTheses[i]);
+    allTheses[i] = thesis;
+    totalProblems += problemsCount;
+  }
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
   console.log(`Processed ${allTheses.length.toLocaleString()} theses.`);
-  return { fileCount: allTheses.length };
+  console.log(`Problem count for the batch: ${totalProblems.toLocaleString()}`);
+  return { fileCount: allTheses.length, totalProblems };
+}
+
+function cleanThesis(thesis: ThesisExtended) {
+  let problemsCount = 0;
+  if (thesis.name?.includes("<")) {
+    console.log("🟡 Thesis name includes '<'  :", thesis.name);
+    problemsCount++;
+  }
+  const startsWithNumberRegex = /^\d/;
+  if (thesis.name && startsWithNumberRegex.test(thesis.name)) {
+    console.log("🟡 Thesis name starts with a number:", thesis.name);
+    problemsCount++;
+  }
+  if (!thesis.name) {
+    console.log("🟡 Thesis name is missing:", thesis.name);
+    problemsCount++;
+  }
+  if (thesis.university && thesis.university.startsWith(",")) {
+    console.log("🟡 University starts with a comma:", thesis.university);
+    problemsCount++;
+  }
+  if (
+    thesis.advisors &&
+    thesis.advisors.some((a) => a.includes("Yer Bilgisi:"))
+  ) {
+    console.log(
+      "\n\n🟡 Advisors include 'Yer Bilgisi:'",
+      thesis.advisors,
+      `\nUniversity: ${thesis.university}`,
+      `\nInstitute: ${thesis.institute}`,
+      `\nDepartment: ${thesis.department}`,
+      `\nBranch: ${thesis.branch}`,
+      `\nThesis ID: ${thesis.thesis_id}`
+    );
+    problemsCount++;
+  }
+  if (thesis.advisors && thesis.advisors.some((a) => a.includes("null "))) {
+    console.log("🟡 Advisors include 'null '", thesis.advisors);
+    problemsCount++;
+  }
+  return { thesis, problemsCount };
 }
 
 if (process.argv[1] === __filename) {
