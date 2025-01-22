@@ -4,7 +4,8 @@ downloads
 progress.txt
 logs
 jsons
-jsons-extended
+jsons-extended*
+jsons-cleaned*
 json-parse-errors.txt
 extend-json-progress.txt
 progress-postgres.txt

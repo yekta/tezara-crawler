@@ -12,6 +12,7 @@
     "dev": "tsx watch src/index.ts",
     "parse": "tsx src/parse-as-json/parse-as-json.ts",
     "extend": "tsx src/extend-json/extend-json.ts",
+    "clean": "tsx src/clean-json/clean-json.ts",
     "push-to-postgres": "tsx src/push-to-db/push-to-postgres.ts",
     "push-to-meili": "tsx src/push-to-db/push-to-meili.ts",
     "type-check": "tsc"
