@@ -84,27 +84,47 @@ function processBatch(files: string[], inputDir: string, outputDir: string) {
 function cleanThesis(thesis: ThesisExtended) {
   let problemsCount = 0;
   if (thesis.name?.includes("<")) {
-    console.log("🟡 Thesis name includes '<'  :", thesis.name);
+    console.log("🟡 Thesis author includes '<'  :", thesis.name);
     problemsCount++;
   }
   const startsWithNumberRegex = /^\d/;
   if (thesis.name && startsWithNumberRegex.test(thesis.name)) {
-    console.log("🟡 Thesis name starts with a number:", thesis.name);
+    console.log("🟡 Thesis author starts with a number:", thesis.name);
     problemsCount++;
   }
   if (!thesis.name) {
-    console.log("🟡 Thesis name is missing:", thesis.name);
+    console.log("🔴 Thesis author is missing:", thesis.name);
+    problemsCount++;
+  }
+  if (!thesis.title_original) {
+    console.log(
+      "🔴 Title original is missing:",
+      thesis.title_original,
+      thesis.title_translated,
+      thesis.thesis_id
+    );
+    problemsCount++;
+  }
+  if (!thesis.university) {
+    console.log("🔴 University is missing:", thesis.university);
     problemsCount++;
   }
   if (thesis.university && thesis.university.startsWith(",")) {
     console.log("🟡 University starts with a comma:", thesis.university);
     problemsCount++;
   }
+  if (!thesis.institute) {
+    console.log("🔴 Institute is missing:", thesis.institute);
+    problemsCount++;
+  }
+  if (!thesis.pages) {
+    problemsCount++;
+  }
   if (
     thesis.advisors &&
     thesis.advisors.some((a) => a.includes("Yer Bilgisi:"))
   ) {
-    console.log(
+    /* console.log(
       "\n\n🟡 Advisors include 'Yer Bilgisi:'",
       thesis.advisors,
       `\nUniversity: ${thesis.university}`,
@@ -112,11 +132,35 @@ function cleanThesis(thesis: ThesisExtended) {
       `\nDepartment: ${thesis.department}`,
       `\nBranch: ${thesis.branch}`,
       `\nThesis ID: ${thesis.thesis_id}`
-    );
+    ); */
     problemsCount++;
   }
   if (thesis.advisors && thesis.advisors.some((a) => a.includes("null "))) {
-    console.log("🟡 Advisors include 'null '", thesis.advisors);
+    /* console.log("🟡 Advisors include 'null '", thesis.advisors); */
+    problemsCount++;
+  }
+  if (!thesis.advisors || thesis.advisors.length < 1) {
+    console.log("🔴 Advisors is missing:", thesis.thesis_id);
+    problemsCount++;
+  }
+  if (!thesis.id_1) {
+    console.log("🔴 ID_1 is missing:", thesis.thesis_id);
+    problemsCount++;
+  }
+  if (!thesis.id_2) {
+    console.log("🔴 ID_2 is missing:", thesis.thesis_id);
+    problemsCount++;
+  }
+  if (!thesis.year) {
+    console.log("🔴 Year is missing:", thesis.thesis_id);
+    problemsCount++;
+  }
+  if (!thesis.thesis_type) {
+    console.log("🔴 Thesis type is missing:", thesis.thesis_id);
+    problemsCount++;
+  }
+  if (!thesis.language) {
+    console.log("🔴 Language is missing:", thesis.thesis_id);
     problemsCount++;
   }
   return { thesis, problemsCount };
