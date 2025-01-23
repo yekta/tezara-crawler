@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { ThesisExtended } from "../types";
 import { FinalThesisSchema } from "./schema";
 import { z } from "zod";
+import { createOrAppendToFile } from "./helpers";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,25 +27,68 @@ async function main(batchSize = 100): Promise<void> {
     let processedFileCount = 0;
     let grandTotalProblems = 0;
 
+    const universities = new Set<string>();
+    const institutes = new Set<string>();
+    const departments = new Set<string>();
+    const branches = new Set<string>();
+
     for (let i = 0; i < jsonFiles.length; i += batchSize) {
       console.log(
         `Processing batch: ${i.toLocaleString()} to ${(
           i + batchSize
         ).toLocaleString()}`
       );
-      const { fileCount, totalProblems } = processBatch(
-        jsonFiles.slice(i, i + batchSize),
+      const {
+        fileCount,
+        totalProblems,
+        universities: universitiesBatch,
+        institutes: institutesBatch,
+        departments: departmentsBatch,
+        branches: branchesBatch,
+      } = processBatch({
+        files: jsonFiles.slice(i, i + batchSize),
         inputDir,
-        outputDir
-      );
+        outputDir,
+      });
+
+      universitiesBatch.forEach((u) => universities.add(u));
+      institutesBatch.forEach((i) => institutes.add(i));
+      departmentsBatch.forEach((d) => departments.add(d));
+      branchesBatch.forEach((b) => branches.add(b));
+
       grandTotalProblems += totalProblems;
       processedFileCount += fileCount;
+
       console.log(
         `Finished processing batch: ${i.toLocaleString()}-${(
           i + batchSize
         ).toLocaleString()}`
       );
     }
+
+    const universitiesFilePath = path.join(outputDir, "universities.txt");
+    createOrAppendToFile({
+      data: Array.from(universities),
+      path: universitiesFilePath,
+    });
+
+    const institutesFilePath = path.join(outputDir, "institutes.txt");
+    createOrAppendToFile({
+      data: Array.from(institutes),
+      path: institutesFilePath,
+    });
+
+    const departmentsFilePath = path.join(outputDir, "departments.txt");
+    createOrAppendToFile({
+      data: Array.from(departments),
+      path: departmentsFilePath,
+    });
+
+    const branchesFilePath = path.join(outputDir, "branches.txt");
+    createOrAppendToFile({
+      data: Array.from(branches),
+      path: branchesFilePath,
+    });
 
     console.info(
       `\n\n\n🟢 Processed ${processedFileCount.toLocaleString()} thesis records from input.`
@@ -61,7 +105,15 @@ async function main(batchSize = 100): Promise<void> {
   }
 }
 
-function processBatch(files: string[], inputDir: string, outputDir: string) {
+function processBatch({
+  files,
+  inputDir,
+  outputDir,
+}: {
+  files: string[];
+  inputDir: string;
+  outputDir: string;
+}) {
   const allTheses: ThesisExtended[] = [];
   let totalProblems = 0;
   for (const file of files) {
@@ -79,17 +131,26 @@ function processBatch(files: string[], inputDir: string, outputDir: string) {
     totalProblems += problemsCount;
   }
 
-  const authors = cleanedAllTheses.map((t) => t.author);
+  const authors = new Set<string>();
+  const universities = new Set<string>();
+  const institutes = new Set<string>();
+  const departments = new Set<string>();
+  const branches = new Set<string>();
 
-  // create an authors.txt if it doesn't exist
-  // in the output directory and write all authors to it
-  // if it does, append the new authors to it
+  cleanedAllTheses.forEach((thesis) => {
+    authors.add(thesis.author);
+    universities.add(thesis.university);
+    institutes.add(thesis.institute);
+    if (thesis.department) {
+      departments.add(thesis.department);
+    }
+    if (thesis.branch) {
+      branches.add(thesis.branch);
+    }
+  });
+
   const authorsFilePath = path.join(outputDir, "authors.txt");
-  if (!fs.existsSync(authorsFilePath)) {
-    fs.writeFileSync(authorsFilePath, authors.join("\n"));
-  } else {
-    fs.appendFileSync(authorsFilePath, "\n" + authors.join("\n"));
-  }
+  createOrAppendToFile({ path: authorsFilePath, data: Array.from(authors) });
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -97,7 +158,14 @@ function processBatch(files: string[], inputDir: string, outputDir: string) {
 
   console.log(`Processed ${allTheses.length.toLocaleString()} theses.`);
   console.log(`Problem count for the batch: ${totalProblems.toLocaleString()}`);
-  return { fileCount: cleanedAllTheses.length, totalProblems };
+  return {
+    fileCount: cleanedAllTheses.length,
+    totalProblems,
+    universities,
+    institutes,
+    departments,
+    branches,
+  };
 }
 
 function cleanThesis(thesis: ThesisExtended) {
@@ -105,7 +173,6 @@ function cleanThesis(thesis: ThesisExtended) {
   if (thesis.name?.includes("<")) {
     console.log("🟡 Thesis author includes '<'  :", thesis.name);
     thesis.name = thesis.name.slice(1);
-    thesis.name = thesis.name.trim();
     console.log("🟢 Thesis author after cleaning:", `"${thesis.name}"`);
     problemsCount++;
   }
@@ -122,6 +189,26 @@ function cleanThesis(thesis: ThesisExtended) {
   if (!thesis.name) {
     console.log("🔴 Thesis author is missing:", thesis.name);
     problemsCount++;
+  }
+
+  // there is a url like this in the name, replace it
+  // http://172.16.3.193:8102/UlusalTezMerkezi/YonetimPaneli/tezDetay.jsp?sira=1427
+  const urlRegex = /http.*UlusalTezMerkezi.*?(?=\s|$)/g;
+  if (thesis.name && urlRegex.test(thesis.name)) {
+    console.log("🟡 Thesis author includes a URL:", thesis.name);
+    thesis.name = thesis.name.replace(urlRegex, "");
+    thesis.name = thesis.name.trim();
+    console.log("🟢 Thesis author after cleaning:", `"${thesis.name}"`);
+    problemsCount++;
+  }
+
+  // replace all double+ spaces with single space
+  if (thesis.name) {
+    thesis.name = thesis.name.replace(/\s{2,}/g, " ");
+  }
+
+  if (thesis.name) {
+    thesis.name = thesis.name.trim();
   }
 
   if (!thesis.title_original) {
@@ -146,6 +233,15 @@ function cleanThesis(thesis: ThesisExtended) {
     }
     problemsCount++;
   }
+
+  if (thesis.title_original) {
+    thesis.title_original = thesis.title_original.trim();
+  }
+
+  if (thesis.title_translated) {
+    thesis.title_translated = thesis.title_translated.trim();
+  }
+
   if (!thesis.university) {
     console.log("🔴 University is missing:", thesis.university);
     problemsCount++;
@@ -153,17 +249,39 @@ function cleanThesis(thesis: ThesisExtended) {
   if (thesis.university && thesis.university.startsWith(",")) {
     console.log("🟡 University starts with a comma:", thesis.university);
     thesis.university = thesis.university.slice(1);
-    thesis.university = thesis.university.trim();
     problemsCount++;
     console.log("🟢 University after cleaning:", `"${thesis.university}"`);
   }
+  if (thesis.university) {
+    thesis.university = thesis.university.trim();
+  }
+
   if (!thesis.institute) {
     console.log("🔴 Institute is missing:", thesis.institute);
     problemsCount++;
   }
+  if (thesis.institute?.includes(")") && !thesis.institute?.includes("(")) {
+    console.log("🟡 Institute includes ')' but not '(':", thesis.institute);
+    thesis.institute = thesis.institute.replace(")", "");
+    problemsCount++;
+    console.log("🟢 Institute after cleaning:", `"${thesis.institute}"`);
+  }
+  if (thesis.institute) {
+    thesis.institute = thesis.institute.trim();
+  }
+
+  if (thesis.branch) {
+    thesis.branch = thesis.branch.trim();
+  }
+
+  if (thesis.department) {
+    thesis.department = thesis.department.trim();
+  }
+
   if (!thesis.pages) {
     problemsCount++;
   }
+
   if (
     thesis.advisors &&
     thesis.advisors.some((a) => a.includes("Yer Bilgisi:"))
