@@ -31,6 +31,10 @@ async function main(batchSize = 100): Promise<void> {
     const institutes = new Set<string>();
     const departments = new Set<string>();
     const branches = new Set<string>();
+    const thesisTypes = new Set<string>();
+    const languages = new Set<string>();
+    const pageCounts = new Set<string>();
+    const years = new Set<string>();
 
     for (let i = 0; i < jsonFiles.length; i += batchSize) {
       console.log(
@@ -45,6 +49,10 @@ async function main(batchSize = 100): Promise<void> {
         institutes: institutesBatch,
         departments: departmentsBatch,
         branches: branchesBatch,
+        thesisTypes: thesisTypesBatch,
+        languages: languagesBatch,
+        pageCounts: pageCountsBatch,
+        years: yearsBatch,
       } = processBatch({
         files: jsonFiles.slice(i, i + batchSize),
         inputDir,
@@ -55,6 +63,10 @@ async function main(batchSize = 100): Promise<void> {
       institutesBatch.forEach((i) => institutes.add(i));
       departmentsBatch.forEach((d) => departments.add(d));
       branchesBatch.forEach((b) => branches.add(b));
+      thesisTypesBatch.forEach((t) => thesisTypes.add(t));
+      languagesBatch.forEach((l) => languages.add(l));
+      pageCountsBatch.forEach((p) => pageCounts.add(p));
+      yearsBatch.forEach((y) => years.add(y));
 
       grandTotalProblems += totalProblems;
       processedFileCount += fileCount;
@@ -88,6 +100,30 @@ async function main(batchSize = 100): Promise<void> {
     createOrAppendToFile({
       data: Array.from(branches),
       path: branchesFilePath,
+    });
+
+    const thesisTypesFilePath = path.join(outputDir, "thesis_types.txt");
+    createOrAppendToFile({
+      data: Array.from(thesisTypes),
+      path: thesisTypesFilePath,
+    });
+
+    const languagesFilePath = path.join(outputDir, "languages.txt");
+    createOrAppendToFile({
+      data: Array.from(languages),
+      path: languagesFilePath,
+    });
+
+    const pageCountsFilePath = path.join(outputDir, "page_counts.txt");
+    createOrAppendToFile({
+      data: Array.from(pageCounts),
+      path: pageCountsFilePath,
+    });
+
+    const yearsFilePath = path.join(outputDir, "years.txt");
+    createOrAppendToFile({
+      data: Array.from(years),
+      path: yearsFilePath,
     });
 
     console.info(
@@ -132,13 +168,38 @@ function processBatch({
   }
 
   const authors = new Set<string>();
+  const advisors = new Set<string>();
+  const titles = new Set<string>();
+  const translatedTitles = new Set<string>();
+  const pdfUrls = new Set<string>();
+  const detailIds = new Set<string>();
+  const subjectsTurkish = new Set<string>();
+  const subjectsEnglish = new Set<string>();
+  const keywordsTurkish = new Set<string>();
+  const keywordsEnglish = new Set<string>();
+
+  // These are the batch specific sets that don't write to txt
   const universities = new Set<string>();
   const institutes = new Set<string>();
   const departments = new Set<string>();
   const branches = new Set<string>();
+  const thesisTypes = new Set<string>();
+  const languages = new Set<string>();
+  const pageCounts = new Set<string>();
+  const years = new Set<string>();
 
   cleanedAllTheses.forEach((thesis) => {
     authors.add(thesis.author);
+    thesis.advisors.forEach((a) => advisors.add(a));
+    titles.add(thesis.title_original);
+    if (thesis.title_translated) {
+      translatedTitles.add(thesis.title_translated);
+    }
+    if (thesis.pdf_url) {
+      pdfUrls.add(thesis.pdf_url);
+    }
+
+    //
     universities.add(thesis.university);
     institutes.add(thesis.institute);
     if (thesis.department) {
@@ -147,10 +208,79 @@ function processBatch({
     if (thesis.branch) {
       branches.add(thesis.branch);
     }
+    thesisTypes.add(thesis.thesis_type);
+    languages.add(thesis.language);
+    if (thesis.page_count) {
+      pageCounts.add(thesis.page_count.toString());
+    }
+    years.add(thesis.year.toString());
+
+    detailIds.add(`${thesis.detail_id_1} ||| ${thesis.detail_id_2}`);
+
+    if (thesis.subjects_turkish && thesis.subjects_turkish.length > 0) {
+      subjectsTurkish.add(thesis.subjects_turkish.join(" ||| "));
+    }
+    if (thesis.subjects_english && thesis.subjects_english.length > 0) {
+      subjectsEnglish.add(thesis.subjects_english.join(" ||| "));
+    }
+    if (thesis.keywords_turkish && thesis.keywords_turkish.length > 0) {
+      keywordsTurkish.add(thesis.keywords_turkish.join(" ||| "));
+    }
+    if (thesis.keywords_english && thesis.keywords_english.length > 0) {
+      keywordsEnglish.add(thesis.keywords_english.join(" ||| "));
+    }
   });
 
   const authorsFilePath = path.join(outputDir, "authors.txt");
   createOrAppendToFile({ path: authorsFilePath, data: Array.from(authors) });
+
+  const advisorsFilePath = path.join(outputDir, "advisors.txt");
+  createOrAppendToFile({ path: advisorsFilePath, data: Array.from(advisors) });
+
+  const titlesFilePath = path.join(outputDir, "titles.txt");
+  createOrAppendToFile({ path: titlesFilePath, data: Array.from(titles) });
+
+  const translatedTitlesFilePath = path.join(
+    outputDir,
+    "translated_titles.txt"
+  );
+  createOrAppendToFile({
+    path: translatedTitlesFilePath,
+    data: Array.from(translatedTitles),
+  });
+
+  const pdfUrlsFilePath = path.join(outputDir, "pdf_urls.txt");
+  createOrAppendToFile({ path: pdfUrlsFilePath, data: Array.from(pdfUrls) });
+
+  const detailIdsFilePath = path.join(outputDir, "detail_ids.txt");
+  createOrAppendToFile({
+    path: detailIdsFilePath,
+    data: Array.from(detailIds),
+  });
+
+  const subjectsTurkishFilePath = path.join(outputDir, "subjects_turkish.txt");
+  createOrAppendToFile({
+    path: subjectsTurkishFilePath,
+    data: Array.from(subjectsTurkish),
+  });
+
+  const subjectsEnglishFilePath = path.join(outputDir, "subjects_english.txt");
+  createOrAppendToFile({
+    path: subjectsEnglishFilePath,
+    data: Array.from(subjectsEnglish),
+  });
+
+  const keywordsTurkishFilePath = path.join(outputDir, "keywords_turkish.txt");
+  createOrAppendToFile({
+    path: keywordsTurkishFilePath,
+    data: Array.from(keywordsTurkish),
+  });
+
+  const keywordsEnglishFilePath = path.join(outputDir, "keywords_english.txt");
+  createOrAppendToFile({
+    path: keywordsEnglishFilePath,
+    data: Array.from(keywordsEnglish),
+  });
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -165,29 +295,33 @@ function processBatch({
     institutes,
     departments,
     branches,
+    thesisTypes,
+    languages,
+    pageCounts,
+    years,
   };
 }
 
 function cleanThesis(thesis: ThesisExtended) {
   let problemsCount = 0;
   if (thesis.name?.includes("<")) {
-    console.log("🟡 Thesis author includes '<'  :", thesis.name);
+    console.log("🟡 Author includes '<'  :", thesis.name);
     thesis.name = thesis.name.slice(1);
-    console.log("🟢 Thesis author after cleaning:", `"${thesis.name}"`);
+    console.log("🟢 Author after cleaning:", `"${thesis.name}"`);
     problemsCount++;
   }
 
   const startsWithNumberRegex = /^\d/;
   if (thesis.name && startsWithNumberRegex.test(thesis.name)) {
-    console.log("🟡 Thesis author starts with a number:", thesis.name);
+    console.log("🟡 Author starts with a number:", thesis.name);
     thesis.name = thesis.name.replace(/^\d+/, "");
     thesis.name = thesis.name.trim();
-    console.log("🟢 Thesis author after cleaning:", `"${thesis.name}"`);
+    console.log("🟢 Author after cleaning:", `"${thesis.name}"`);
     problemsCount++;
   }
 
   if (!thesis.name) {
-    console.log("🔴 Thesis author is missing:", thesis.name);
+    console.log("🔴 Author is missing:", thesis.name);
     problemsCount++;
   }
 
@@ -195,10 +329,10 @@ function cleanThesis(thesis: ThesisExtended) {
   // http://172.16.3.193:8102/UlusalTezMerkezi/YonetimPaneli/tezDetay.jsp?sira=1427
   const urlRegex = /http.*UlusalTezMerkezi.*?(?=\s|$)/g;
   if (thesis.name && urlRegex.test(thesis.name)) {
-    console.log("🟡 Thesis author includes a URL:", thesis.name);
+    console.log("🟡 Author includes a URL:", thesis.name);
     thesis.name = thesis.name.replace(urlRegex, "");
     thesis.name = thesis.name.trim();
-    console.log("🟢 Thesis author after cleaning:", `"${thesis.name}"`);
+    console.log("🟢 Author after cleaning:", `"${thesis.name}"`);
     problemsCount++;
   }
 
@@ -232,6 +366,40 @@ function cleanThesis(thesis: ThesisExtended) {
       );
     }
     problemsCount++;
+  }
+
+  const invisibleCharRegex = /‎/g;
+
+  if (thesis.title_original && invisibleCharRegex.test(thesis.title_original)) {
+    console.log(
+      "🟡 Title includes invisible character [U+200E]:",
+      thesis.title_original
+    );
+    thesis.title_original = thesis.title_original.replace(
+      invisibleCharRegex,
+      ""
+    );
+    console.log("🟢 Title after cleaning:", `"${thesis.title_original}"`);
+    problemsCount++;
+  }
+
+  if (
+    thesis.title_translated &&
+    invisibleCharRegex.test(thesis.title_translated)
+  ) {
+    console.log(
+      "🟡 Translated title includes invisible character [U+200E]:",
+      thesis.title_translated
+    );
+    thesis.title_translated = thesis.title_translated.replace(
+      invisibleCharRegex,
+      ""
+    );
+    console.log(
+      "🟢 Translated title after cleaning:",
+      `"${thesis.title_translated}"`
+    );
+    thesis.title_translated;
   }
 
   if (thesis.title_original) {
@@ -276,10 +444,6 @@ function cleanThesis(thesis: ThesisExtended) {
 
   if (thesis.department) {
     thesis.department = thesis.department.trim();
-  }
-
-  if (!thesis.pages) {
-    problemsCount++;
   }
 
   if (
@@ -349,6 +513,27 @@ function cleanThesis(thesis: ThesisExtended) {
   if (!thesis.pages) {
     thesis.pages = null;
   }
+  if (!thesis.pdf_url) {
+    thesis.pdf_url = null;
+  }
+  if (!thesis.abstract_original) {
+    thesis.abstract_original = null;
+  }
+  if (!thesis.abstract_translated) {
+    thesis.abstract_translated = null;
+  }
+
+  if (thesis.subjects_turkish) {
+    thesis.subjects_turkish = thesis.subjects_turkish
+      .map((s) => s.trim())
+      .filter((s) => s);
+  }
+
+  if (thesis.subjects_english) {
+    thesis.subjects_english = thesis.subjects_english
+      .map((s) => s.trim())
+      .filter((s) => s);
+  }
 
   const cleanedThesis = FinalThesisSchema.parse({
     title_original: thesis.title_original,
@@ -370,7 +555,7 @@ function cleanThesis(thesis: ThesisExtended) {
     title_translated: thesis.title_translated,
     abstract_original: thesis.abstract_original,
     abstract_translated: thesis.abstract_translated,
-    pages: thesis.pages,
+    page_count: thesis.pages,
     pdf_url: thesis.pdf_url,
     department: thesis.department,
     branch: thesis.department,

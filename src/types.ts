@@ -14,32 +14,32 @@ export interface CrawlerConfig {
 
 export type Thesis = {
   thesis_id: string | null;
-  id_1: string | null;
-  id_2: string | null;
-  name: string | null;
-  year: string | null;
-  title_original: string | null;
-  title_translated: string | null;
-  university: string | null;
-  language: string | null;
-  thesis_type: string | null;
+  id_1: string | null; // DONE
+  id_2: string | null; // DONE
+  name: string | null; // DONE
+  year: string | null; // DONE
+  title_original: string | null; // DONE
+  title_translated: string | null; // DONE
+  university: string | null; // DONE
+  language: string | null; // DONE
+  thesis_type: string | null; // DONE
   subjects_turkish: string[] | null;
   subjects_english: string[] | null;
 };
 
 export type Extention = {
-  tez_no: number | null;
-  pdf_url: string | null;
-  advisors: string[] | null;
-  pages: number | null;
-  abstract_original: string | null;
-  abstract_translated: string | null;
+  tez_no: number | null; // NOT NEEDED
+  pdf_url: string | null; // DONE
+  advisors: string[] | null; // DONE
+  pages: number | null; // DONE
+  abstract_original: string | null; // DONE
+  abstract_translated: string | null; // DONE
   keywords_turkish: string[] | null;
   keywords_english: string[] | null;
-  status: string | null;
-  institute: string | null;
-  department: string | null;
-  branch: string | null;
+  status: string | null; // NOT NEEDED
+  institute: string | null; // DONE
+  department: string | null; // DONE
+  branch: string | null; // DONE
 };
 
 export type ThesisExtended = Omit<Thesis, "thesis_id" | "year"> &
