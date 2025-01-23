@@ -4,7 +4,15 @@ import fs from "node:fs";
 import { ThesisExtended } from "../types";
 import { FinalThesisSchema } from "./schema";
 import { z } from "zod";
-import { createOrAppendToFile } from "./helpers";
+import {
+  cleanAfter,
+  createOrAppendToFile,
+  includesAll,
+  parseNumberedStringAsList,
+  replaceCharacters,
+  splitBy,
+} from "./helpers";
+import { cleanKeywords } from "./clean-keywords";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -78,49 +86,53 @@ async function main(batchSize = 100): Promise<void> {
       );
     }
 
-    const universitiesFilePath = path.join(outputDir, "universities.txt");
+    const universitiesFilePath = path.join(
+      outputDir,
+      "txt",
+      "universities.txt"
+    );
     createOrAppendToFile({
       data: Array.from(universities),
       path: universitiesFilePath,
     });
 
-    const institutesFilePath = path.join(outputDir, "institutes.txt");
+    const institutesFilePath = path.join(outputDir, "txt", "institutes.txt");
     createOrAppendToFile({
       data: Array.from(institutes),
       path: institutesFilePath,
     });
 
-    const departmentsFilePath = path.join(outputDir, "departments.txt");
+    const departmentsFilePath = path.join(outputDir, "txt", "departments.txt");
     createOrAppendToFile({
       data: Array.from(departments),
       path: departmentsFilePath,
     });
 
-    const branchesFilePath = path.join(outputDir, "branches.txt");
+    const branchesFilePath = path.join(outputDir, "txt", "branches.txt");
     createOrAppendToFile({
       data: Array.from(branches),
       path: branchesFilePath,
     });
 
-    const thesisTypesFilePath = path.join(outputDir, "thesis_types.txt");
+    const thesisTypesFilePath = path.join(outputDir, "txt", "thesis_types.txt");
     createOrAppendToFile({
       data: Array.from(thesisTypes),
       path: thesisTypesFilePath,
     });
 
-    const languagesFilePath = path.join(outputDir, "languages.txt");
+    const languagesFilePath = path.join(outputDir, "txt", "languages.txt");
     createOrAppendToFile({
       data: Array.from(languages),
       path: languagesFilePath,
     });
 
-    const pageCountsFilePath = path.join(outputDir, "page_counts.txt");
+    const pageCountsFilePath = path.join(outputDir, "txt", "page_counts.txt");
     createOrAppendToFile({
       data: Array.from(pageCounts),
       path: pageCountsFilePath,
     });
 
-    const yearsFilePath = path.join(outputDir, "years.txt");
+    const yearsFilePath = path.join(outputDir, "txt", "years.txt");
     createOrAppendToFile({
       data: Array.from(years),
       path: yearsFilePath,
@@ -231,17 +243,18 @@ function processBatch({
     }
   });
 
-  const authorsFilePath = path.join(outputDir, "authors.txt");
+  const authorsFilePath = path.join(outputDir, "txt", "authors.txt");
   createOrAppendToFile({ path: authorsFilePath, data: Array.from(authors) });
 
-  const advisorsFilePath = path.join(outputDir, "advisors.txt");
+  const advisorsFilePath = path.join(outputDir, "txt", "advisors.txt");
   createOrAppendToFile({ path: advisorsFilePath, data: Array.from(advisors) });
 
-  const titlesFilePath = path.join(outputDir, "titles.txt");
+  const titlesFilePath = path.join(outputDir, "txt", "titles.txt");
   createOrAppendToFile({ path: titlesFilePath, data: Array.from(titles) });
 
   const translatedTitlesFilePath = path.join(
     outputDir,
+    "txt",
     "translated_titles.txt"
   );
   createOrAppendToFile({
@@ -249,34 +262,50 @@ function processBatch({
     data: Array.from(translatedTitles),
   });
 
-  const pdfUrlsFilePath = path.join(outputDir, "pdf_urls.txt");
+  const pdfUrlsFilePath = path.join(outputDir, "txt", "pdf_urls.txt");
   createOrAppendToFile({ path: pdfUrlsFilePath, data: Array.from(pdfUrls) });
 
-  const detailIdsFilePath = path.join(outputDir, "detail_ids.txt");
+  const detailIdsFilePath = path.join(outputDir, "txt", "detail_ids.txt");
   createOrAppendToFile({
     path: detailIdsFilePath,
     data: Array.from(detailIds),
   });
 
-  const subjectsTurkishFilePath = path.join(outputDir, "subjects_turkish.txt");
+  const subjectsTurkishFilePath = path.join(
+    outputDir,
+    "txt",
+    "subjects_turkish.txt"
+  );
   createOrAppendToFile({
     path: subjectsTurkishFilePath,
     data: Array.from(subjectsTurkish),
   });
 
-  const subjectsEnglishFilePath = path.join(outputDir, "subjects_english.txt");
+  const subjectsEnglishFilePath = path.join(
+    outputDir,
+    "txt",
+    "subjects_english.txt"
+  );
   createOrAppendToFile({
     path: subjectsEnglishFilePath,
     data: Array.from(subjectsEnglish),
   });
 
-  const keywordsTurkishFilePath = path.join(outputDir, "keywords_turkish.txt");
+  const keywordsTurkishFilePath = path.join(
+    outputDir,
+    "txt",
+    "keywords_turkish.txt"
+  );
   createOrAppendToFile({
     path: keywordsTurkishFilePath,
     data: Array.from(keywordsTurkish),
   });
 
-  const keywordsEnglishFilePath = path.join(outputDir, "keywords_english.txt");
+  const keywordsEnglishFilePath = path.join(
+    outputDir,
+    "txt",
+    "keywords_english.txt"
+  );
   createOrAppendToFile({
     path: keywordsEnglishFilePath,
     data: Array.from(keywordsEnglish),
@@ -495,6 +524,48 @@ function cleanThesis(thesis: ThesisExtended) {
     console.log("🔴 Language is missing:", thesis.thesis_id);
     problemsCount++;
   }
+
+  if (thesis.keywords_english) {
+    thesis.keywords_english.forEach((keyword) => {
+      if (keyword.length > 100) {
+        problemsCount++;
+      }
+    });
+  }
+
+  if (thesis.keywords_turkish) {
+    thesis.keywords_turkish = cleanKeywords({
+      keywords: thesis.keywords_turkish,
+    });
+  }
+
+  //////////////////////////////
+  //////////////////////////////
+
+  if (thesis.keywords_english) {
+    thesis.keywords_english = thesis.keywords_english
+      .map((s) => s.trim())
+      .map((s) => (s.endsWith(".") ? s.slice(0, -1) : s))
+      .map((s) => s.trim())
+      .filter((s) => s);
+  }
+
+  if (thesis.subjects_turkish) {
+    thesis.subjects_turkish = thesis.subjects_turkish
+      .map((s) => s.trim())
+      .map((s) => (s.endsWith(".") ? s.slice(0, -1) : s))
+      .map((s) => s.trim())
+      .filter((s) => s);
+  }
+
+  if (thesis.subjects_english) {
+    thesis.subjects_english = thesis.subjects_english
+      .map((s) => s.trim())
+      .map((s) => (s.endsWith(".") ? s.slice(0, -1) : s))
+      .map((s) => s.trim())
+      .filter((s) => s);
+  }
+
   if (!thesis.title_translated) {
     thesis.title_translated = null;
   }
@@ -521,18 +592,6 @@ function cleanThesis(thesis: ThesisExtended) {
   }
   if (!thesis.abstract_translated) {
     thesis.abstract_translated = null;
-  }
-
-  if (thesis.subjects_turkish) {
-    thesis.subjects_turkish = thesis.subjects_turkish
-      .map((s) => s.trim())
-      .filter((s) => s);
-  }
-
-  if (thesis.subjects_english) {
-    thesis.subjects_english = thesis.subjects_english
-      .map((s) => s.trim())
-      .filter((s) => s);
   }
 
   const cleanedThesis = FinalThesisSchema.parse({
