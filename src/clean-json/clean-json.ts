@@ -12,7 +12,11 @@ import {
   replaceCharacters,
   splitBy,
 } from "./helpers";
-import { cleanKeywords } from "./clean-keywords";
+import {
+  cleanKeywords,
+  cleanWordsWithSplit,
+  splitArrayIntoBeforeAndAfter,
+} from "./clean-keywords";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -525,30 +529,34 @@ function cleanThesis(thesis: ThesisExtended) {
     problemsCount++;
   }
 
-  if (thesis.keywords_english) {
-    thesis.keywords_english.forEach((keyword) => {
-      if (keyword.length > 100) {
-        problemsCount++;
-      }
-    });
-  }
-
   if (thesis.keywords_turkish) {
     thesis.keywords_turkish = cleanKeywords({
       keywords: thesis.keywords_turkish,
     });
+    thesis.keywords_turkish = cleanWordsWithSplit({
+      input: thesis.keywords_turkish,
+    });
+    const { beforeSplit, afterSplit } = splitArrayIntoBeforeAndAfter({
+      input: thesis.keywords_turkish,
+    });
+    if (beforeSplit.length > 0 && afterSplit.length > 0) {
+      thesis.keywords_turkish = beforeSplit
+        .map((s) => s.trim())
+        .filter((s) => s);
+      thesis.keywords_english = afterSplit
+        .map((s) => s.trim())
+        .filter((s) => s);
+    }
   }
-
-  //////////////////////////////
-  //////////////////////////////
 
   if (thesis.keywords_english) {
-    thesis.keywords_english = thesis.keywords_english
-      .map((s) => s.trim())
-      .map((s) => (s.endsWith(".") ? s.slice(0, -1) : s))
-      .map((s) => s.trim())
-      .filter((s) => s);
+    thesis.keywords_english = cleanKeywords({
+      keywords: thesis.keywords_english,
+    });
   }
+
+  //////////////////////////////
+  //////////////////////////////
 
   if (thesis.subjects_turkish) {
     thesis.subjects_turkish = thesis.subjects_turkish
