@@ -9,6 +9,7 @@ import { TFinalThesis } from "../clean-json/schema";
 import { md5Hash } from "../helpers";
 import { TIndex } from "./types";
 import fs from "node:fs";
+import pRetry from "p-retry";
 
 const host = process.env.MEILI_HOST || "";
 const apiKey = process.env.MEILI_API_KEY || "";
@@ -58,7 +59,7 @@ const indexes: Record<
     ],
     sortable: ["id", "year"],
     shape: (doc) => doc,
-    batchSize: 2_000,
+    batchSize: 1_000,
     xOrder: -1,
   },
   universities: {
@@ -103,14 +104,14 @@ const indexes: Record<
     sortable: ["name"],
     filterable: ["name"],
     shape: (doc) => ({ name: doc.author, id: md5Hash(doc.author) }),
-    batchSize: 20_000,
+    batchSize: 10_000,
   },
   advisors: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
     shape: (doc) => doc.advisors.map((name) => ({ name, id: md5Hash(name) })),
-    batchSize: 20_000,
+    batchSize: 10_000,
   },
   thesis_types: {
     maxTotalHits: 5_000,
@@ -138,7 +139,7 @@ const indexes: Record<
     filterable: ["name"],
     shape: (doc) =>
       doc.keywords_turkish.map((name) => ({ name, id: md5Hash(name) })),
-    batchSize: 20_000,
+    batchSize: 10_000,
   },
   keywords_english: {
     maxTotalHits: 5_000,
@@ -146,7 +147,7 @@ const indexes: Record<
     filterable: ["name"],
     shape: (doc) =>
       doc.keywords_english.map((name) => ({ name, id: md5Hash(name) })),
-    batchSize: 20_000,
+    batchSize: 10_000,
   },
 } as const;
 
@@ -198,14 +199,22 @@ async function main() {
     console.log(maxTotalHitsRes);
   }
 
+  console.log("⏳ Loading all files into memory...");
   const allThesis: TFinalThesis[] = [];
   const files = fs.readdirSync(inputDir);
   for (const file of files) {
     const filePath = path.join(inputDir, file);
     const data = fs.readFileSync(filePath, "utf-8");
     const json: TFinalThesis[] = JSON.parse(data);
-    allThesis.concat(json);
+    console.log(
+      "File loaded:",
+      file,
+      "| Thesis count:",
+      json.length.toLocaleString()
+    );
+    allThesis.push(...json);
   }
+  console.log("🟢 All files loaded. Thesis count:", allThesis.length);
 
   const sortedIndexes = Object.keys(indexes).sort(
     (a, b) =>
@@ -228,6 +237,8 @@ async function main() {
       }
     }
     const data = Array.from(dataMap.values());
+
+    console.log(`🔍 Index: ${typedIndex} | Processing ${data.length} docs...`);
 
     await processIndex({
       indexName: typedIndex,
@@ -271,7 +282,10 @@ async function processIndex({
         i / finalBatchSize + 1
       } of ${Math.ceil(data.length / finalBatchSize)}`
     );
-    const res = await index.addDocuments(batch);
+    const res = await pRetry(() => index.addDocuments(batch), {
+      retries: 5,
+      factor: 2,
+    });
     console.log(res);
   }
 }
