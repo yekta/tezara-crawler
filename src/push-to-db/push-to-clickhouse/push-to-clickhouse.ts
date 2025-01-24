@@ -35,21 +35,14 @@ async function insertInBatches<T>(
   for (let i = 0; i < data.length; i += batchSize) {
     const batch = data.slice(i, i + batchSize);
     const batchCount = Math.ceil(data.length / batchSize);
-    try {
-      await client.insert({
-        table,
-        values: batch,
-        format: "JSONEachRow",
-      });
-      console.log(
-        `Inserted batch: ${i / batchSize + 1}/${batchCount} | Table: ${table}`
-      );
-    } catch (err) {
-      console.error(
-        `Error inserting batch: ${i / batchSize + 1} | Table: ${table}`,
-        err
-      );
-    }
+    await client.insert({
+      table,
+      values: batch,
+      format: "JSONEachRow",
+    });
+    console.log(
+      `Inserted batch: ${i / batchSize + 1}/${batchCount} | Table: ${table}`
+    );
   }
 }
 
