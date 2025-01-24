@@ -19,7 +19,7 @@ export async function createSchema(
         language String,
         page_count Nullable(UInt32),
         department Nullable(String),
-        branch Nullable(String),
+        branch Nullable(String)
     ) ENGINE = MergeTree()
     ORDER BY id`,
 
@@ -56,9 +56,8 @@ export async function createSchema(
 
   for (const query of queries) {
     try {
-      const res = await client.query({ query });
-      const json = await res.json();
-      console.log("Table created/exists:", json);
+      await client.query({ query });
+      console.log("Table created/exists");
     } catch (err) {
       console.error("Error creating table:", err);
     }

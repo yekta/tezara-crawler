@@ -14,15 +14,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const inputDir = path.join(__dirname, "..", "..", "..", "jsons-cleaned/json");
 
-export type Thesis = z.infer<typeof FinalThesisSchema>;
-export type KeywordOrSubjectLanguage = "Turkish" | "English";
-export type Keyword = {
+type Thesis = z.infer<typeof FinalThesisSchema>;
+type Keyword = {
   name: string;
-  language: KeywordOrSubjectLanguage;
+  language: string;
 };
-export type Subject = {
+type Subject = {
   name: string;
-  language: KeywordOrSubjectLanguage;
+  language: string;
+};
+type Advisor = {
+  name: string;
 };
 
 async function insertInBatches<T>(
@@ -65,6 +67,7 @@ async function main(): Promise<void> {
   const theses: Thesis[] = [];
   const keywords = new Map<string, Keyword>();
   const subjects = new Map<string, Subject>();
+  const advisors = new Map<string, Advisor>();
 
   const files = fs.readdirSync(inputDir);
   for (const file of files) {
@@ -93,12 +96,16 @@ async function main(): Promise<void> {
       for (const keyword of thesis.keywords_english) {
         keywords.set(keyword, { name: keyword, language: "English" });
       }
+      for (const advisor of thesis.advisors) {
+        advisors.set(advisor, { name: advisor });
+      }
     }
   }
 
   console.log("Total theses:", theses.length.toLocaleString());
   console.log("Total unique keywords:", keywords.size.toLocaleString());
   console.log("Total unique subjects:", subjects.size.toLocaleString());
+  console.log("Total unique advisors:", advisors.size.toLocaleString());
 
   // Insert data into ClickHouse in batches
   try {
@@ -106,35 +113,92 @@ async function main(): Promise<void> {
 
     const simpleTheses = theses.map((thesis) => ({
       id: thesis.id,
-      title_original: thesis.title_original,
       author: thesis.author,
       university: thesis.university,
       institute: thesis.institute,
       year: thesis.year,
       thesis_type: thesis.thesis_type,
       language: thesis.language,
+      page_count: thesis.page_count,
+      department: thesis.department,
+      branch: thesis.branch,
     }));
     await insertInBatches(client, "theses", simpleTheses, batchSize);
 
-    const subjectsArray = Array.from(subjects.values());
-    await insertInBatches(client, "subjects", subjectsArray, batchSize);
-
+    //////////////////
+    //// KEYWORDS ////
+    //////////////////
     const keywordsArray = Array.from(keywords.values());
     await insertInBatches(client, "keywords", keywordsArray, batchSize);
 
-    const thesisKeywordMappings = [];
+    const thesisKeywordMappings: { thesis_id: number; keyword_name: string }[] =
+      [];
     for (const thesis of theses) {
       for (const keyword of thesis.keywords_turkish) {
-        thesisKeywordMappings.push({ thesis_id: thesis.id, keyword });
+        thesisKeywordMappings.push({
+          thesis_id: thesis.id,
+          keyword_name: keyword,
+        });
       }
       for (const keyword of thesis.keywords_english) {
-        thesisKeywordMappings.push({ thesis_id: thesis.id, keyword });
+        thesisKeywordMappings.push({
+          thesis_id: thesis.id,
+          keyword_name: keyword,
+        });
       }
     }
     await insertInBatches(
       client,
       "thesis_keywords",
       thesisKeywordMappings,
+      batchSize
+    );
+
+    //////////////////
+    //// SUBJECTS ////
+    //////////////////
+    const subjectsArray = Array.from(subjects.values());
+    await insertInBatches(client, "subjects", subjectsArray, batchSize);
+
+    const thesisSubjectMappings: { thesis_id: number; subject_name: string }[] =
+      [];
+    for (const thesis of theses) {
+      for (const subject of thesis.subjects_turkish) {
+        thesisSubjectMappings.push({
+          thesis_id: thesis.id,
+          subject_name: subject,
+        });
+      }
+      for (const subject of thesis.subjects_english) {
+        thesisSubjectMappings.push({
+          thesis_id: thesis.id,
+          subject_name: subject,
+        });
+      }
+    }
+    await insertInBatches(
+      client,
+      "thesis_subjects",
+      thesisSubjectMappings,
+      batchSize
+    );
+
+    //////////////////
+    //// ADVISORS ////
+    //////////////////
+    const advisorsArray = Array.from(advisors.values());
+    await insertInBatches(client, "advisors", advisorsArray, batchSize);
+
+    const thesisAdvisorMappings = [];
+    for (const thesis of theses) {
+      for (const advisor of thesis.advisors) {
+        thesisAdvisorMappings.push({ thesis_id: thesis.id, advisor });
+      }
+    }
+    await insertInBatches(
+      client,
+      "thesis_advisors",
+      thesisAdvisorMappings,
       batchSize
     );
 
