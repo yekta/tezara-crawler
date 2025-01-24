@@ -6,6 +6,7 @@ logs
 jsons
 jsons-extended*
 jsons-cleaned*
+jsons-final*
 json-parse-errors.txt
 extend-json-progress.txt
 progress-postgres.txt

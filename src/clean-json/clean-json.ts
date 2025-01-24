@@ -1,23 +1,16 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import fs from "node:fs";
-import { ThesisExtended } from "../types";
-import { FinalThesisSchema } from "./schema";
 import { z } from "zod";
-import {
-  cleanAfter,
-  createOrAppendToFile,
-  includesAll,
-  parseNumberedStringAsList,
-  replaceCharacters,
-  splitBy,
-} from "./helpers";
+import { md5Hash } from "../helpers";
+import { ThesisExtended } from "../types";
 import {
   cleanKeywords,
   cleanWordsWithSplit,
   splitArrayIntoBeforeAndAfter,
 } from "./clean-keywords";
-import { md5Hash } from "../helpers";
+import { createOrAppendToFile } from "./helpers";
+import { FinalThesisSchema } from "./schema";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

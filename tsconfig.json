@@ -22,7 +22,10 @@
     "jsons",
     "jsons-extended",
     "jsons-cleaned",
+    "json-rows",
+    "jsons-final",
     "logs",
-    "dist"
+    "dist",
+    "downloads"
   ]
 }
