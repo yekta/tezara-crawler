@@ -1,7 +1,6 @@
 import { config } from "dotenv";
 config();
 
-import { createHash } from "crypto";
 import { MeiliSearch } from "meilisearch";
 import {
   appendFileSync,
@@ -12,7 +11,7 @@ import {
 } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cleanAdvisors, cleanUniversity } from "../helpers";
+import { cleanAdvisors, cleanUniversity, md5Hash } from "../helpers";
 import { ThesisExtended } from "../types";
 import { TIndex } from "./types";
 
@@ -26,7 +25,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const processedFilesPath = resolve(__dirname, "../../progress-meili.txt");
-const folderPath = resolve(__dirname, "../../jsons-extended");
+const folderPath = resolve(__dirname, "../../jsons-cleaned/json");
 
 if (!existsSync(processedFilesPath)) {
   writeFileSync(processedFilesPath, "", "utf-8");
@@ -332,8 +331,4 @@ function logProcessedFile(fileName: string, index: TIndex) {
 
   appendFileSync(processedFilesPath, `${adjustedFileName}\n`, "utf-8");
   console.log(`Index: ${index} | Logged processed file: ${adjustedFileName}`);
-}
-
-function md5Hash(data: string) {
-  return createHash("md5").update(data).digest("hex");
 }

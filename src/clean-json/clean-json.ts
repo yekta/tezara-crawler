@@ -17,6 +17,7 @@ import {
   cleanWordsWithSplit,
   splitArrayIntoBeforeAndAfter,
 } from "./clean-keywords";
+import { md5Hash } from "../helpers";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -182,6 +183,26 @@ function processBatch({
     cleanedAllTheses.push(thesis);
     totalProblems += problemsCount;
   }
+
+  //// WRITE TO A JSON FILE
+  // split the array to 4 parts
+  let allArrays: z.infer<typeof FinalThesisSchema>[][] = [];
+  const chunkSize = 10_000;
+  const outputFolder = path.join(outputDir, "json");
+  if (!fs.existsSync(outputFolder)) {
+    fs.mkdirSync(outputFolder, { recursive: true });
+  }
+  for (let i = 0; i < cleanedAllTheses.length; i += chunkSize) {
+    allArrays.push(cleanedAllTheses.slice(i, i + chunkSize));
+  }
+  for (let i = 0; i < allArrays.length; i++) {
+    const filePath = path.join(
+      outputFolder,
+      `${md5Hash(allArrays[i].map((i) => i.id).join(","))}.json`
+    );
+    fs.writeFileSync(filePath, JSON.stringify(allArrays[i], null, 2));
+  }
+  //////////////////////////
 
   const authors = new Set<string>();
   const advisors = new Set<string>();
@@ -602,7 +623,13 @@ function cleanThesis(thesis: ThesisExtended) {
     thesis.abstract_translated = null;
   }
 
+  thesis.keywords_turkish = Array.from(new Set(thesis.keywords_turkish));
+  thesis.keywords_english = Array.from(new Set(thesis.keywords_english));
+  thesis.subjects_turkish = Array.from(new Set(thesis.subjects_turkish));
+  thesis.subjects_english = Array.from(new Set(thesis.subjects_english));
+
   const cleanedThesis = FinalThesisSchema.parse({
+    id: thesis.thesis_id,
     title_original: thesis.title_original,
     author: thesis.name,
     advisors: thesis.advisors,

@@ -17,5 +17,12 @@
     "esm": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "jsons", "jsons-extended", "logs", "dist"]
+  "exclude": [
+    "node_modules",
+    "jsons",
+    "jsons-extended",
+    "jsons-cleaned",
+    "logs",
+    "dist"
+  ]
 }

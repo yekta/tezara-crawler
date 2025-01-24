@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const FinalThesisSchema = z.object({
   // Has to be there
+  id: z.number(),
   title_original: z.string().nonempty(),
   author: z.string().nonempty(),
   advisors: z.array(z.string().nonempty()),
