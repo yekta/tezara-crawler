@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+const LanguageEnum = z.enum(["Turkish", "English"]);
+
+const SubjectSchema = z.object({
+  name: z.string().nonempty(),
+  language: LanguageEnum,
+});
+
+const KeywordSchema = z.object({
+  name: z.string().nonempty(),
+  language: LanguageEnum,
+});
+
 export const FinalThesisSchema = z.object({
   // Has to be there
   id: z.number(),
@@ -13,10 +25,8 @@ export const FinalThesisSchema = z.object({
   year: z.number().min(1),
   thesis_type: z.string().nonempty(),
   language: z.string().nonempty(),
-  subjects_turkish: z.array(z.string().nonempty()),
-  subjects_english: z.array(z.string().nonempty()),
-  keywords_turkish: z.array(z.string().nonempty()),
-  keywords_english: z.array(z.string().nonempty()),
+  keywords: z.array(KeywordSchema),
+  subjects: z.array(SubjectSchema),
 
   // Can be null
   title_translated: z.string().nonempty().nullable(),

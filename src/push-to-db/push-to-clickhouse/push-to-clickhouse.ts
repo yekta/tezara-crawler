@@ -89,17 +89,17 @@ async function main(): Promise<void> {
 
     // Process keywords and subjects
     for (const thesis of json) {
-      for (const subject of thesis.subjects_turkish) {
-        subjects.set(subject, { name: subject, language: "Turkish" });
+      for (const subject of thesis.subjects) {
+        subjects.set(`${subject.name}||${subject.language}`, {
+          name: subject.name,
+          language: subject.language,
+        });
       }
-      for (const subject of thesis.subjects_english) {
-        subjects.set(subject, { name: subject, language: "English" });
-      }
-      for (const keyword of thesis.keywords_turkish) {
-        keywords.set(keyword, { name: keyword, language: "Turkish" });
-      }
-      for (const keyword of thesis.keywords_english) {
-        keywords.set(keyword, { name: keyword, language: "English" });
+      for (const keyword of thesis.keywords) {
+        keywords.set(`${keyword.name}||${keyword.language}`, {
+          name: keyword.name,
+          language: keyword.language,
+        });
       }
       for (const advisor of thesis.advisors) {
         advisors.set(advisor, { name: advisor });
@@ -139,16 +139,10 @@ async function main(): Promise<void> {
     const thesisKeywordMappings: { thesis_id: number; keyword_name: string }[] =
       [];
     for (const thesis of theses) {
-      for (const keyword of thesis.keywords_turkish) {
+      for (const keyword of thesis.keywords) {
         thesisKeywordMappings.push({
           thesis_id: thesis.id,
-          keyword_name: keyword,
-        });
-      }
-      for (const keyword of thesis.keywords_english) {
-        thesisKeywordMappings.push({
-          thesis_id: thesis.id,
-          keyword_name: keyword,
+          keyword_name: keyword.name,
         });
       }
     }
@@ -168,16 +162,10 @@ async function main(): Promise<void> {
     const thesisSubjectMappings: { thesis_id: number; subject_name: string }[] =
       [];
     for (const thesis of theses) {
-      for (const subject of thesis.subjects_turkish) {
+      for (const subject of thesis.subjects) {
         thesisSubjectMappings.push({
           thesis_id: thesis.id,
-          subject_name: subject,
-        });
-      }
-      for (const subject of thesis.subjects_english) {
-        thesisSubjectMappings.push({
-          thesis_id: thesis.id,
-          subject_name: subject,
+          subject_name: subject.name,
         });
       }
     }

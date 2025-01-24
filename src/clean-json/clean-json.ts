@@ -203,10 +203,8 @@ function processBatch({
   const translatedTitles = new Set<string>();
   const pdfUrls = new Set<string>();
   const detailIds = new Set<string>();
-  const subjectsTurkish = new Set<string>();
-  const subjectsEnglish = new Set<string>();
-  const keywordsTurkish = new Set<string>();
-  const keywordsEnglish = new Set<string>();
+  const subjects = new Set<string>();
+  const keywords = new Set<string>();
 
   // These are the batch specific sets that don't write to txt
   const universities = new Set<string>();
@@ -247,17 +245,15 @@ function processBatch({
 
     detailIds.add(`${thesis.detail_id_1} ||| ${thesis.detail_id_2}`);
 
-    if (thesis.subjects_turkish && thesis.subjects_turkish.length > 0) {
-      subjectsTurkish.add(thesis.subjects_turkish.join(" ||| "));
+    if (thesis.subjects && thesis.subjects.length > 0) {
+      subjects.add(
+        thesis.subjects.map((i) => `${i.name}||${i.language}`).join(" ||| ")
+      );
     }
-    if (thesis.subjects_english && thesis.subjects_english.length > 0) {
-      subjectsEnglish.add(thesis.subjects_english.join(" ||| "));
-    }
-    if (thesis.keywords_turkish && thesis.keywords_turkish.length > 0) {
-      keywordsTurkish.add(thesis.keywords_turkish.join(" ||| "));
-    }
-    if (thesis.keywords_english && thesis.keywords_english.length > 0) {
-      keywordsEnglish.add(thesis.keywords_english.join(" ||| "));
+    if (thesis.keywords && thesis.keywords.length > 0) {
+      keywords.add(
+        thesis.keywords.map((i) => `${i.name}||${i.language}`).join(" ||| ")
+      );
     }
   });
 
@@ -289,44 +285,16 @@ function processBatch({
     data: Array.from(detailIds),
   });
 
-  const subjectsTurkishFilePath = path.join(
-    outputDir,
-    "txt",
-    "subjects_turkish.txt"
-  );
+  const subjectsFilePath = path.join(outputDir, "txt", "subjects.txt");
   createOrAppendToFile({
-    path: subjectsTurkishFilePath,
-    data: Array.from(subjectsTurkish),
+    path: subjectsFilePath,
+    data: Array.from(subjects),
   });
 
-  const subjectsEnglishFilePath = path.join(
-    outputDir,
-    "txt",
-    "subjects_english.txt"
-  );
+  const keywordsFilePath = path.join(outputDir, "txt", "keywords.txt");
   createOrAppendToFile({
-    path: subjectsEnglishFilePath,
-    data: Array.from(subjectsEnglish),
-  });
-
-  const keywordsTurkishFilePath = path.join(
-    outputDir,
-    "txt",
-    "keywords_turkish.txt"
-  );
-  createOrAppendToFile({
-    path: keywordsTurkishFilePath,
-    data: Array.from(keywordsTurkish),
-  });
-
-  const keywordsEnglishFilePath = path.join(
-    outputDir,
-    "txt",
-    "keywords_english.txt"
-  );
-  createOrAppendToFile({
-    path: keywordsEnglishFilePath,
-    data: Array.from(keywordsEnglish),
+    path: keywordsFilePath,
+    data: Array.from(keywords),
   });
 
   if (!fs.existsSync(outputDir)) {
@@ -653,11 +621,14 @@ function cleanThesis(thesis: ThesisExtended) {
     year: thesis.year,
     thesis_type: thesis.thesis_type,
     language: thesis.language,
-    subjects_turkish: thesis.subjects_turkish,
-    subjects_english: thesis.subjects_english,
-    keywords_turkish: thesis.keywords_turkish,
-    keywords_english: thesis.keywords_english,
-
+    subjects: [
+      ...thesis.subjects_turkish.map((i) => ({ name: i, language: "Turkish" })),
+      ...thesis.subjects_english.map((i) => ({ name: i, language: "English" })),
+    ],
+    keywords: [
+      ...thesis.keywords_turkish.map((i) => ({ name: i, language: "Turkish" })),
+      ...thesis.keywords_english.map((i) => ({ name: i, language: "English" })),
+    ],
     // Can be null
     title_translated: thesis.title_translated,
     abstract_original: thesis.abstract_original,

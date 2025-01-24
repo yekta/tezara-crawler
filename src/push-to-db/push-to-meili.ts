@@ -29,9 +29,6 @@ if (!existsSync(processedFilesPath)) {
 
 type DocReturn = Record<string, any> & { id: number | string };
 
-const LANGUAGE_TURKISH = "Turkish";
-const LANGUAGE_ENGLISH = "English";
-
 const indexes: Record<
   TIndex,
   {
@@ -63,42 +60,7 @@ const indexes: Record<
       "subjects.name",
     ],
     sortable: ["id", "year"],
-    shape: (doc) => {
-      const {
-        keywords_english,
-        keywords_turkish,
-        subjects_english,
-        subjects_turkish,
-        ...rest
-      } = doc;
-
-      const keywords = [
-        ...keywords_english.map((name) => ({
-          name,
-          language: LANGUAGE_ENGLISH,
-        })),
-        ...keywords_turkish.map((name) => ({
-          name,
-          language: LANGUAGE_TURKISH,
-        })),
-      ];
-      const subjects = [
-        ...subjects_english.map((name) => ({
-          name,
-          language: LANGUAGE_ENGLISH,
-        })),
-        ...subjects_turkish.map((name) => ({
-          name,
-          language: LANGUAGE_TURKISH,
-        })),
-      ];
-
-      return {
-        ...rest,
-        keywords,
-        subjects,
-      };
-    },
+    shape: (doc) => doc,
     batchSize: 2_000,
     xOrder: -1,
   },
@@ -163,36 +125,22 @@ const indexes: Record<
     maxTotalHits: 5_000,
     sortable: ["name", "language"],
     filterable: ["name", "language"],
-    shape: (doc) => [
-      ...doc.keywords_english.map((name) => ({
-        name,
+    shape: (doc) =>
+      doc.keywords.map(({ name, ...rest }) => ({
+        ...rest,
         id: md5Hash(name),
-        language: LANGUAGE_ENGLISH,
       })),
-      ...doc.keywords_turkish.map((name) => ({
-        name,
-        id: md5Hash(name),
-        language: LANGUAGE_TURKISH,
-      })),
-    ],
     batchSize: 20_000,
   },
   subjects: {
     maxTotalHits: 5_000,
     sortable: ["name", "language"],
     filterable: ["name", "language"],
-    shape: (doc) => [
-      ...doc.subjects_english.map((name) => ({
-        name,
+    shape: (doc) =>
+      doc.subjects.map(({ name, ...rest }) => ({
+        ...rest,
         id: md5Hash(name),
-        language: LANGUAGE_ENGLISH,
       })),
-      ...doc.subjects_turkish.map((name) => ({
-        name,
-        id: md5Hash(name),
-        language: LANGUAGE_TURKISH,
-      })),
-    ],
   },
 } as const;
 
