@@ -283,13 +283,39 @@ async function processIndex({
     );
   }
 
+  const processed = fs.readFileSync(processedFilesPath, "utf-8").split("\n");
+
+  const processedHashes = new Set<string>(
+    processed
+      .map((line) => {
+        const arr = line.split("|||");
+        if (arr.length === 3) {
+          return arr[2];
+        }
+        return "";
+      })
+      .filter(Boolean)
+  );
+
   for (let i = 0; i < data.length; i += finalBatchSize) {
     const batch = data.slice(i, i + finalBatchSize);
+    const batchHash = md5Hash(JSON.stringify(batch));
+
+    if (processedHashes.has(batchHash)) {
+      console.log(
+        `🔵 Index: ${indexName} | Skipping batch ${
+          i / finalBatchSize + 1
+        }. Already processed.`
+      );
+      continue;
+    }
+
     console.log(
       `Index: ${indexName} | Adding batch ${
         i / finalBatchSize + 1
       } of ${Math.ceil(data.length / finalBatchSize)}`
     );
+
     const res = await pRetry(() => index.addDocuments(batch), {
       retries: 5,
       factor: 2,
@@ -300,5 +326,11 @@ async function processIndex({
       },
     });
     console.log(res);
+
+    fs.appendFileSync(
+      processedFilesPath,
+      `${indexName}|||batch|||${batchHash}\n`,
+      "utf-8"
+    );
   }
 }
