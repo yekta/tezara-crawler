@@ -8,7 +8,5 @@ export type TIndex =
   | "institutes"
   | "departments"
   | "branches"
-  | "subjects_turkish"
-  | "subjects_english"
-  | "keywords_turkish"
-  | "keywords_english";
+  | "subjects"
+  | "keywords";

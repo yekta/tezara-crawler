@@ -29,6 +29,9 @@ if (!existsSync(processedFilesPath)) {
 
 type DocReturn = Record<string, any> & { id: number | string };
 
+const LANGUAGE_TURKISH = "Turkish";
+const LANGUAGE_ENGLISH = "English";
+
 const indexes: Record<
   TIndex,
   {
@@ -119,35 +122,40 @@ const indexes: Record<
     filterable: ["name"],
     shape: (doc) => ({ name: doc.thesis_type, id: md5Hash(doc.thesis_type) }),
   },
-  subjects_turkish: {
+  keywords: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
-    shape: (doc) =>
-      doc.subjects_turkish.map((name) => ({ name, id: md5Hash(name) })),
-  },
-  subjects_english: {
-    maxTotalHits: 5_000,
-    sortable: ["name"],
-    filterable: ["name"],
-    shape: (doc) =>
-      doc.subjects_english.map((name) => ({ name, id: md5Hash(name) })),
-  },
-  keywords_turkish: {
-    maxTotalHits: 5_000,
-    sortable: ["name"],
-    filterable: ["name"],
-    shape: (doc) =>
-      doc.keywords_turkish.map((name) => ({ name, id: md5Hash(name) })),
+    shape: (doc) => [
+      ...doc.keywords_turkish.map((name) => ({
+        name,
+        id: md5Hash(name),
+        language: LANGUAGE_TURKISH,
+      })),
+      ...doc.keywords_english.map((name) => ({
+        name,
+        id: md5Hash(name),
+        language: LANGUAGE_ENGLISH,
+      })),
+    ],
     batchSize: 10_000,
   },
-  keywords_english: {
+  subjects: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
-    shape: (doc) =>
-      doc.keywords_english.map((name) => ({ name, id: md5Hash(name) })),
-    batchSize: 10_000,
+    shape: (doc) => [
+      ...doc.subjects_turkish.map((name) => ({
+        name,
+        id: md5Hash(name),
+        language: LANGUAGE_TURKISH,
+      })),
+      ...doc.subjects_english.map((name) => ({
+        name,
+        id: md5Hash(name),
+        language: LANGUAGE_ENGLISH,
+      })),
+    ],
   },
 } as const;
 
