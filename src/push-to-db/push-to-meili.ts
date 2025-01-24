@@ -55,10 +55,8 @@ const indexes: Record<
       "language",
       "advisors",
       "author",
-      "keywords_turkish",
-      "keywords_english",
-      "subjects_turkish",
-      "subjects_english",
+      "keywords",
+      "subjects",
     ],
     sortable: ["id", "year"],
     shape: (doc) => doc,
@@ -127,15 +125,15 @@ const indexes: Record<
     sortable: ["name"],
     filterable: ["name"],
     shape: (doc) => [
-      ...doc.keywords_turkish.map((name) => ({
-        name,
-        id: md5Hash(name),
-        language: LANGUAGE_TURKISH,
-      })),
       ...doc.keywords_english.map((name) => ({
         name,
         id: md5Hash(name),
         language: LANGUAGE_ENGLISH,
+      })),
+      ...doc.keywords_turkish.map((name) => ({
+        name,
+        id: md5Hash(name),
+        language: LANGUAGE_TURKISH,
       })),
     ],
     batchSize: 10_000,
@@ -145,15 +143,15 @@ const indexes: Record<
     sortable: ["name"],
     filterable: ["name"],
     shape: (doc) => [
-      ...doc.subjects_turkish.map((name) => ({
-        name,
-        id: md5Hash(name),
-        language: LANGUAGE_TURKISH,
-      })),
       ...doc.subjects_english.map((name) => ({
         name,
         id: md5Hash(name),
         language: LANGUAGE_ENGLISH,
+      })),
+      ...doc.subjects_turkish.map((name) => ({
+        name,
+        id: md5Hash(name),
+        language: LANGUAGE_TURKISH,
       })),
     ],
   },
