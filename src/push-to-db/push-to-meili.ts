@@ -322,23 +322,13 @@ async function processIndex({
 
   const processed = fs.readFileSync(processedFilesPath, "utf-8").split("\n");
 
-  const processedHashes = new Set<string>(
-    processed
-      .map((line) => {
-        const arr = line.split("|||");
-        if (arr.length === 3) {
-          return arr[2];
-        }
-        return "";
-      })
-      .filter(Boolean)
-  );
+  const processedKeys = new Set<string>(processed.filter(Boolean));
 
   for (let i = 0; i < data.length; i += finalBatchSize) {
     const batch = data.slice(i, i + finalBatchSize);
-    const batchHash = md5Hash(JSON.stringify(batch));
+    const batchKey = getKey(indexName, JSON.stringify(batch));
 
-    if (processedHashes.has(batchHash)) {
+    if (processedKeys.has(batchKey)) {
       console.log(
         `🔵 Index: ${indexName} | Skipping batch ${
           i / finalBatchSize + 1
@@ -364,10 +354,10 @@ async function processIndex({
     });
     console.log(res);
 
-    fs.appendFileSync(
-      processedFilesPath,
-      `${indexName}|||batch|||${batchHash}\n`,
-      "utf-8"
-    );
+    fs.appendFileSync(processedFilesPath, `${batchKey}\n`, "utf-8");
   }
+}
+
+function getKey(indexName: string, doc: string) {
+  return `${indexName}|||batch|||${md5Hash(doc)}`;
 }
