@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSchema } from "./create-schema";
 import { TFinalThesis } from "../../clean-json/schema";
+import pRetry from "p-retry";
 
 config();
 
@@ -31,17 +32,30 @@ async function insertInBatches<T>(
   data: T[],
   batchSize: number
 ): Promise<void> {
-  console.log(`Inserting into ${table} in batches of ${batchSize}...`);
+  console.log(`Table: ${table} | Inserting batches of ${batchSize}...`);
   for (let i = 0; i < data.length; i += batchSize) {
     const batch = data.slice(i, i + batchSize);
     const batchCount = Math.ceil(data.length / batchSize);
-    await client.insert({
-      table,
-      values: batch,
-      format: "JSONEachRow",
-    });
+    const batchNumber = i / batchSize + 1;
+    await pRetry(
+      () =>
+        client.insert({
+          table,
+          values: batch,
+          format: "JSONEachRow",
+        }),
+      {
+        retries: 5,
+        factor: 2,
+        onFailedAttempt: (error) => {
+          console.log(
+            `🔴 Table: ${table} | Batch: ${batchNumber} | Attempt ${error.attemptNumber} failed. There are ${error.retriesLeft} retries left.`
+          );
+        },
+      }
+    );
     console.log(
-      `Inserted batch: ${i / batchSize + 1}/${batchCount} | Table: ${table}`
+      `Table: ${table} | Inserted batch: ${batchNumber}/${batchCount}`
     );
   }
 }

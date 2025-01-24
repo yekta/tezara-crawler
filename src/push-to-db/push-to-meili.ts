@@ -291,6 +291,11 @@ async function processIndex({
     const res = await pRetry(() => index.addDocuments(batch), {
       retries: 5,
       factor: 2,
+      onFailedAttempt: (error) => {
+        console.log(
+          `🔴 Index: ${indexName} | Attempt ${error.attemptNumber} failed. There are ${error.retriesLeft} retries left.`
+        );
+      },
     });
     console.log(res);
   }
