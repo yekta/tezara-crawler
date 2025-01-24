@@ -16,9 +16,11 @@
     "generate-final-objects": "node --max-old-space-size=16000 --import tsx src/generate-final-objects/generate-final-objects.ts",
     "push-to-postgres": "tsx src/push-to-db/push-to-postgres.ts",
     "push-to-meili": "tsx src/push-to-db/push-to-meili.ts",
+    "push-to-clickhouse": "node --max-old-space-size=16000 --import tsx src/push-to-db/push-to-clickhouse/push-to-clickhouse.ts",
     "type-check": "tsc"
   },
   "dependencies": {
+    "@clickhouse/client": "^1.10.1",
     "acorn": "^8.14.0",
     "acorn-walk": "^8.3.4",
     "cheerio": "^1.0.0",

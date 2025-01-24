@@ -103,3 +103,11 @@ export function replaceCharacters({
     return item;
   });
 }
+
+export function trimStrings(input: string, toTrim: string[]): string {
+  const escapeRegExp = (str: string) =>
+    str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedTrim = toTrim.map(escapeRegExp).join("|");
+  const regex = new RegExp(`^(?:${escapedTrim})+|(?:${escapedTrim})+$`, "g");
+  return input.replace(regex, "");
+}

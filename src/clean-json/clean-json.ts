@@ -9,7 +9,7 @@ import {
   cleanWordsWithSplit,
   splitArrayIntoBeforeAndAfter,
 } from "./clean-keywords";
-import { createOrAppendToFile } from "./helpers";
+import { createOrAppendToFile, trimStrings } from "./helpers";
 import { FinalThesisSchema } from "./schema";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -567,6 +567,26 @@ function cleanThesis(thesis: ThesisExtended) {
     thesis.keywords_english = cleanKeywords({
       keywords: thesis.keywords_english,
     });
+  }
+
+  const trimArray = [`"`, `'`, `-`, `!`, `^`, `?`, `“`, ` `];
+  if (thesis.keywords_turkish) {
+    thesis.keywords_turkish = thesis.keywords_turkish.map((k) =>
+      trimStrings(k, trimArray)
+    );
+
+    thesis.keywords_turkish = thesis.keywords_turkish.filter(
+      (k) => k.length > 2
+    );
+  }
+  if (thesis.keywords_english) {
+    thesis.keywords_english = thesis.keywords_english.map((k) =>
+      trimStrings(k, trimArray)
+    );
+
+    thesis.keywords_english = thesis.keywords_english.filter(
+      (k) => k.length > 2
+    );
   }
 
   //////////////////////////////
