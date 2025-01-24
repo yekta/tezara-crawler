@@ -1,10 +1,9 @@
+import { config } from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { FinalThesisSchema } from "../clean-json/schema";
-import { config } from "dotenv";
-import { md5Hash } from "../helpers";
 import {
   processKeywords,
   processSubjects,
@@ -20,14 +19,14 @@ const outputDir = path.join(__dirname, "..", "..", "jsons-final");
 export type Thesis = z.infer<typeof FinalThesisSchema>;
 export type KeywordOrSubjectLanguage = "Turkish" | "English";
 export type Keyword = {
-  keyword: string;
+  name: string;
   id: string;
   language: KeywordOrSubjectLanguage;
   thesis_count: number;
   thesis_count_by_year: { [year: string]: number };
 };
 export type Subject = {
-  subject: string;
+  name: string;
   id: string;
   language: KeywordOrSubjectLanguage;
   thesis_count: number;

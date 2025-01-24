@@ -70,7 +70,7 @@ export function processKeyword({
     }
   } else {
     keywordsMap.set(keyword, {
-      keyword,
+      name: keyword,
       id: md5Hash(keyword),
       language: language,
       thesis_count: 1,
@@ -124,7 +124,7 @@ export function processSubject({
     }
   } else {
     subjectsMap.set(subject, {
-      subject,
+      name: subject,
       id: md5Hash(subject),
       language: language,
       thesis_count: 1,
