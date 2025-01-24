@@ -1,12 +1,11 @@
+import { createClient } from "@clickhouse/client";
+import { NodeClickHouseClient } from "@clickhouse/client/dist/client";
 import { config } from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { z } from "zod";
-import { FinalThesisSchema } from "../../clean-json/schema";
-import { createClient } from "@clickhouse/client";
-import { NodeClickHouseClient } from "@clickhouse/client/dist/client";
 import { createSchema } from "./create-schema";
+import { TFinalThesis } from "../../clean-json/schema";
 
 config();
 
@@ -14,7 +13,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const inputDir = path.join(__dirname, "..", "..", "..", "jsons-cleaned/json");
 
-type Thesis = z.infer<typeof FinalThesisSchema>;
 type Keyword = {
   name: string;
   language: string;
@@ -64,7 +62,7 @@ async function main(): Promise<void> {
 
   const batchSize = parseInt(process.env.BATCH_SIZE || "10000", 10); // Default batch size: 1000
 
-  const theses: Thesis[] = [];
+  const theses: TFinalThesis[] = [];
   const keywords = new Map<string, Keyword>();
   const subjects = new Map<string, Subject>();
   const advisors = new Map<string, Advisor>();
@@ -73,7 +71,7 @@ async function main(): Promise<void> {
   for (const file of files) {
     const filePath = path.join(inputDir, file);
     const data = fs.readFileSync(filePath, "utf-8");
-    const json: Thesis[] = JSON.parse(data);
+    const json: TFinalThesis[] = JSON.parse(data);
     theses.push(...json);
     console.log(
       "File loaded:",

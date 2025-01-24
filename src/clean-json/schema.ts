@@ -27,3 +27,5 @@ export const FinalThesisSchema = z.object({
   department: z.string().nonempty().nullable(),
   branch: z.string().nonempty().nullable(),
 });
+
+export type TFinalThesis = z.infer<typeof FinalThesisSchema>;

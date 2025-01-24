@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { FinalThesisSchema } from "../clean-json/schema";
+import { FinalThesisSchema, TFinalThesis } from "../clean-json/schema";
 import {
   processKeywords,
   processSubjects,
@@ -16,7 +16,6 @@ const __dirname = path.dirname(__filename);
 const inputDir = path.join(__dirname, "..", "..", "jsons-cleaned/json");
 const outputDir = path.join(__dirname, "..", "..", "jsons-final");
 
-export type Thesis = z.infer<typeof FinalThesisSchema>;
 export type KeywordOrSubjectLanguage = "Turkish" | "English";
 export type Keyword = {
   name: string;
@@ -38,7 +37,7 @@ async function main(): Promise<void> {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const theses: Thesis[] = [];
+  const theses: TFinalThesis[] = [];
   const keywords = new Map<string, Keyword>();
   const subjects = new Map<string, Subject>();
 
@@ -46,7 +45,7 @@ async function main(): Promise<void> {
   for (const file of files) {
     const filePath = path.join(inputDir, file);
     const data = fs.readFileSync(filePath, "utf-8");
-    const json: Thesis[] = JSON.parse(data);
+    const json: TFinalThesis[] = JSON.parse(data);
     theses.push(...json);
     console.log(
       "File loaded:",

@@ -10,7 +10,7 @@ import {
   splitArrayIntoBeforeAndAfter,
 } from "./clean-keywords";
 import { createOrAppendToFile, trimStrings } from "./helpers";
-import { FinalThesisSchema } from "./schema";
+import { FinalThesisSchema, TFinalThesis } from "./schema";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -169,7 +169,7 @@ function processBatch({
     allTheses.push(...data);
   }
 
-  const cleanedAllTheses: z.infer<typeof FinalThesisSchema>[] = [];
+  const cleanedAllTheses: TFinalThesis[] = [];
 
   for (let i = 0; i < allTheses.length; i++) {
     const { thesis, problemsCount } = cleanThesis(allTheses[i]);
@@ -179,7 +179,7 @@ function processBatch({
 
   //// WRITE TO A JSON FILE
   // split the array to 4 parts
-  let allArrays: z.infer<typeof FinalThesisSchema>[][] = [];
+  let allArrays: TFinalThesis[][] = [];
   const chunkSize = 10_000;
   const outputFolder = path.join(outputDir, "json");
   if (!fs.existsSync(outputFolder)) {

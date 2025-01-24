@@ -2,18 +2,13 @@ import { config } from "dotenv";
 config();
 
 import { MeiliSearch } from "meilisearch";
-import {
-  appendFileSync,
-  existsSync,
-  readdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, extname, resolve } from "node:path";
+import { existsSync, writeFileSync } from "node:fs";
+import path, { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cleanAdvisors, cleanUniversity, md5Hash } from "../helpers";
-import { ThesisExtended } from "../types";
+import { TFinalThesis } from "../clean-json/schema";
+import { md5Hash } from "../helpers";
 import { TIndex } from "./types";
+import fs from "node:fs";
 
 const host = process.env.MEILI_HOST || "";
 const apiKey = process.env.MEILI_API_KEY || "";
@@ -25,20 +20,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const processedFilesPath = resolve(__dirname, "../../progress-meili.txt");
-const folderPath = resolve(__dirname, "../../jsons-cleaned/json");
+const inputDir = resolve(__dirname, "../../jsons-cleaned/json");
 
 if (!existsSync(processedFilesPath)) {
   writeFileSync(processedFilesPath, "", "utf-8");
 }
+
+type DocReturn = Record<string, any> & { id: number | string };
 
 const indexes: Record<
   TIndex,
   {
     filterable?: string[];
     sortable?: string[];
-    shape: (doc: ThesisExtended) => null | undefined | any | any[];
-    bulk?: boolean;
+    shape: (doc: TFinalThesis) => DocReturn | DocReturn[] | null;
     maxTotalHits: number;
+    batchSize?: number;
+    xOrder?: number;
   }
 > = {
   theses: {
@@ -59,38 +57,15 @@ const indexes: Record<
       "subjects_english",
     ],
     sortable: ["id", "year"],
-    shape: (doc) => {
-      const {
-        thesis_id,
-        id_1,
-        id_2,
-        tez_no,
-        status,
-        university,
-        name,
-        advisors,
-        ...rest
-      } = doc;
-      return {
-        id: thesis_id,
-        detail_id_1: id_1,
-        detail_id_2: id_2,
-        author: name,
-        university: cleanUniversity(university),
-        advisors: cleanAdvisors(advisors),
-        ...rest,
-      };
-    },
+    shape: (doc) => doc,
+    batchSize: 2_000,
+    xOrder: -1,
   },
   universities: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
-    shape: (doc) =>
-      doc.university
-        ? { name: doc.university, id: md5Hash(doc.university) }
-        : null,
-    bulk: true,
+    shape: (doc) => ({ name: doc.university, id: md5Hash(doc.university) }),
   },
   institutes: {
     maxTotalHits: 5_000,
@@ -100,7 +75,6 @@ const indexes: Record<
       doc.institute
         ? { name: doc.institute, id: md5Hash(doc.institute) }
         : null,
-    bulk: true,
   },
   departments: {
     maxTotalHits: 5_000,
@@ -110,7 +84,6 @@ const indexes: Record<
       doc.department
         ? { name: doc.department, id: md5Hash(doc.department) }
         : null,
-    bulk: true,
   },
   branches: {
     maxTotalHits: 5_000,
@@ -118,79 +91,62 @@ const indexes: Record<
     filterable: ["name"],
     shape: (doc) =>
       doc.branch ? { name: doc.branch, id: md5Hash(doc.branch) } : null,
-    bulk: true,
   },
   languages: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
-    shape: (doc) =>
-      doc.language ? { name: doc.language, id: md5Hash(doc.language) } : null,
-    bulk: true,
+    shape: (doc) => ({ name: doc.language, id: md5Hash(doc.language) }),
+  },
+  authors: {
+    maxTotalHits: 5_000,
+    sortable: ["name"],
+    filterable: ["name"],
+    shape: (doc) => ({ name: doc.author, id: md5Hash(doc.author) }),
+    batchSize: 20_000,
+  },
+  advisors: {
+    maxTotalHits: 5_000,
+    sortable: ["name"],
+    filterable: ["name"],
+    shape: (doc) => doc.advisors.map((name) => ({ name, id: md5Hash(name) })),
+    batchSize: 20_000,
   },
   thesis_types: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
-    shape: (doc) =>
-      doc.thesis_type
-        ? { name: doc.thesis_type, id: md5Hash(doc.thesis_type) }
-        : null,
-    bulk: true,
+    shape: (doc) => ({ name: doc.thesis_type, id: md5Hash(doc.thesis_type) }),
   },
   subjects_turkish: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
     shape: (doc) =>
-      doc.subjects_turkish
-        ?.filter((i) => i)
-        .map((name) => ({ name, id: md5Hash(name) })),
-    bulk: true,
+      doc.subjects_turkish.map((name) => ({ name, id: md5Hash(name) })),
   },
   subjects_english: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
     shape: (doc) =>
-      doc.subjects_english
-        ?.filter((i) => i)
-        .map((name) => ({ name, id: md5Hash(name) })),
-    bulk: true,
-  },
-  authors: {
-    maxTotalHits: 5_000,
-    sortable: ["name"],
-    filterable: ["name"],
-    shape: (doc) =>
-      doc.name ? { name: doc.name, id: md5Hash(doc.name) } : null,
-  },
-  advisors: {
-    maxTotalHits: 5_000,
-    sortable: ["name"],
-    filterable: ["name"],
-    shape: (doc) =>
-      doc.advisors
-        ?.filter((i) => i)
-        .map((name) => ({ name, id: md5Hash(name) })),
+      doc.subjects_english.map((name) => ({ name, id: md5Hash(name) })),
   },
   keywords_turkish: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
     shape: (doc) =>
-      doc.keywords_turkish
-        ?.filter((i) => i)
-        .map((name) => ({ name, id: md5Hash(name) })),
+      doc.keywords_turkish.map((name) => ({ name, id: md5Hash(name) })),
+    batchSize: 20_000,
   },
   keywords_english: {
     maxTotalHits: 5_000,
     sortable: ["name"],
     filterable: ["name"],
     shape: (doc) =>
-      doc.keywords_english
-        ?.filter((i) => i)
-        .map((name) => ({ name, id: md5Hash(name) })),
+      doc.keywords_english.map((name) => ({ name, id: md5Hash(name) })),
+    batchSize: 20_000,
   },
 } as const;
 
@@ -242,33 +198,43 @@ async function main() {
     console.log(maxTotalHitsRes);
   }
 
-  for (const indexName in indexes) {
+  const allThesis: TFinalThesis[] = [];
+  const files = fs.readdirSync(inputDir);
+  for (const file of files) {
+    const filePath = path.join(inputDir, file);
+    const data = fs.readFileSync(filePath, "utf-8");
+    const json: TFinalThesis[] = JSON.parse(data);
+    allThesis.concat(json);
+  }
+
+  const sortedIndexes = Object.keys(indexes).sort(
+    (a, b) =>
+      indexes[b as TIndex].xOrder || 0 - (indexes[a as TIndex].xOrder || 0)
+  );
+  for (const indexName of sortedIndexes) {
+    console.log(`🔍 Index: ${indexName} | Processing all files...`);
+
     const typedIndex = indexName as TIndex;
     const shape = indexes[typedIndex].shape;
-    const processedFiles = getProcessedFiles(typedIndex);
-    const files = readdirSync(folderPath);
-
-    for (const file of files) {
-      if (
-        extname(file) === ".json" &&
-        !processedFiles.has(`${typedIndex}|||${file}`)
-      ) {
-        console.log(`Index: ${typedIndex} | Processing file: ${file}`);
-        try {
-          await processFile(file, client, typedIndex, shape);
-          logProcessedFile(file, typedIndex);
-        } catch (error) {
-          console.error(
-            `Index: ${typedIndex} | Error processing file: ${file}`
-          );
-          console.error(error);
+    const dataMap = new Map<string, any>();
+    for (const thesis of allThesis) {
+      const shaped = shape(thesis);
+      if (Array.isArray(shaped)) {
+        for (const doc of shaped) {
+          dataMap.set(String(doc.id), doc);
         }
-      } else {
-        console.log(
-          `Index: ${typedIndex} | Skipping already processed file: ${file}`
-        );
+      } else if (shaped) {
+        dataMap.set(String(shaped.id), shaped);
       }
     }
+    const data = Array.from(dataMap.values());
+
+    await processIndex({
+      indexName: typedIndex,
+      data,
+      client,
+      batchSize: indexes[typedIndex].batchSize,
+    });
 
     console.log(`✅ Index: ${typedIndex} | Done processing all files.`);
   }
@@ -278,57 +244,34 @@ async function main() {
 
 main();
 
-async function processFile(
-  fileName: string,
-  client: MeiliSearch,
-  indexName: TIndex,
-  shape: (doc: ThesisExtended) => any
-) {
-  const fileContents = readFileSync(resolve(folderPath, fileName), "utf-8");
-  const data: ThesisExtended[] = JSON.parse(fileContents);
-
+async function processIndex({
+  indexName,
+  data,
+  batchSize,
+  client,
+}: {
+  indexName: TIndex;
+  data: any[];
+  batchSize?: number;
+  client: MeiliSearch;
+}) {
   const index = client.index(indexName);
-  const mappedData = data
-    .map(shape)
-    .filter((d) => d !== undefined && d !== null);
-  let flatData: any[] = [];
+  const finalBatchSize = batchSize || data.length;
 
-  mappedData.forEach((d) => {
-    if (Array.isArray(d)) {
-      flatData.push(...d);
-    } else {
-      flatData.push(d);
-    }
-  });
+  if (finalBatchSize) {
+    console.log(
+      `Index: ${indexName} | Splitting into batches of ${finalBatchSize}`
+    );
+  }
 
-  const finalData = flatData.filter((d) => d !== undefined && d !== null);
-  const finalMap = new Map<string, any>();
-  finalData.forEach((d) => {
-    finalMap.set(d.id, d);
-  });
-  const finalDataArray = Array.from(finalMap.values());
-
-  const res = await index.addDocuments(finalDataArray);
-
-  console.log(res);
-  console.log(
-    `Index: ${indexName} | ${indexName} Added ${finalDataArray.length} documents to index: ${indexName}`
-  );
-}
-
-function getProcessedFiles(key: TIndex) {
-  const fileContents = readFileSync(processedFilesPath, "utf-8");
-  return new Set(
-    fileContents
-      .split("\n")
-      .filter((line) => line.trim())
-      .filter((line) => line.startsWith(`${key}|||`))
-  );
-}
-
-function logProcessedFile(fileName: string, index: TIndex) {
-  const adjustedFileName = `${index}|||${fileName}`;
-
-  appendFileSync(processedFilesPath, `${adjustedFileName}\n`, "utf-8");
-  console.log(`Index: ${index} | Logged processed file: ${adjustedFileName}`);
+  for (let i = 0; i < data.length; i += finalBatchSize) {
+    const batch = data.slice(i, i + finalBatchSize);
+    console.log(
+      `Index: ${indexName} | Adding batch ${
+        i / finalBatchSize + 1
+      } of ${Math.ceil(data.length / finalBatchSize)}`
+    );
+    const res = await index.addDocuments(batch);
+    console.log(res);
+  }
 }
