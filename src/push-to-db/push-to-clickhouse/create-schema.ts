@@ -52,6 +52,38 @@ export async function createSchema(
         advisor_name String
     ) ENGINE = MergeTree()
     ORDER BY (thesis_id, advisor_name)`,
+
+    `DROP TABLE IF EXISTS thesis_subject_counts`,
+    `CREATE MATERIALIZED VIEW thesis_subject_counts
+      ENGINE = SummingMergeTree()
+      ORDER BY (university, subject_name, subject_language)
+      POPULATE
+      AS
+      SELECT 
+          t.university,
+          ts.subject_name,
+          s.language as subject_language,
+          count() AS count
+      FROM theses t
+          INNER JOIN thesis_subjects ts ON t.id = ts.thesis_id
+          INNER JOIN subjects s ON ts.subject_name = s.name
+          GROUP BY t.university, ts.subject_name, s.language`,
+
+    `DROP TABLE IF EXISTS thesis_keyword_counts`,
+    `CREATE MATERIALIZED VIEW IF NOT EXISTS thesis_keyword_counts
+      ENGINE = SummingMergeTree()
+      ORDER BY (university, keyword_name, keyword_language)
+      POPULATE
+      AS
+      SELECT 
+          t.university,
+          tk.keyword_name,
+          k.language as keyword_language,
+          count() AS count
+      FROM theses t
+          INNER JOIN thesis_keywords tk ON t.id = tk.thesis_id
+          INNER JOIN keywords k ON tk.keyword_name = k.name
+          GROUP BY t.university, tk.keyword_name, k.language`,
   ];
 
   for (const query of queries) {
