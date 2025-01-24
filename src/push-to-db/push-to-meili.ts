@@ -124,8 +124,8 @@ const indexes: Record<
   },
   keywords: {
     maxTotalHits: 5_000,
-    sortable: ["name"],
-    filterable: ["name"],
+    sortable: ["name", "language"],
+    filterable: ["name", "language"],
     shape: (doc) => [
       ...doc.keywords_english.map((name) => ({
         name,
@@ -142,8 +142,8 @@ const indexes: Record<
   },
   subjects: {
     maxTotalHits: 5_000,
-    sortable: ["name"],
-    filterable: ["name"],
+    sortable: ["name", "language"],
+    filterable: ["name", "language"],
     shape: (doc) => [
       ...doc.subjects_english.map((name) => ({
         name,
