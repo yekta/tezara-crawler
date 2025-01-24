@@ -56,10 +56,49 @@ const indexes: Record<
       "advisors",
       "author",
       "keywords",
+      "keywords.name",
+      "keywords.language",
       "subjects",
+      "subjects.language",
+      "subjects.name",
     ],
     sortable: ["id", "year"],
-    shape: (doc) => doc,
+    shape: (doc) => {
+      const {
+        keywords_english,
+        keywords_turkish,
+        subjects_english,
+        subjects_turkish,
+        ...rest
+      } = doc;
+
+      const keywords = [
+        ...keywords_english.map((name) => ({
+          name,
+          language: LANGUAGE_ENGLISH,
+        })),
+        ...keywords_turkish.map((name) => ({
+          name,
+          language: LANGUAGE_TURKISH,
+        })),
+      ];
+      const subjects = [
+        ...subjects_english.map((name) => ({
+          name,
+          language: LANGUAGE_ENGLISH,
+        })),
+        ...subjects_turkish.map((name) => ({
+          name,
+          language: LANGUAGE_TURKISH,
+        })),
+      ];
+
+      return {
+        ...rest,
+        keywords,
+        subjects,
+      };
+    },
     batchSize: 2_000,
     xOrder: -1,
   },
