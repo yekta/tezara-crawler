@@ -189,10 +189,14 @@ async function main(): Promise<void> {
     const advisorsArray = Array.from(advisors.values());
     await insertInBatches(client, "advisors", advisorsArray, batchSize);
 
-    const thesisAdvisorMappings = [];
+    const thesisAdvisorMappings: { thesis_id: number; advisor_name: string }[] =
+      [];
     for (const thesis of theses) {
       for (const advisor of thesis.advisors) {
-        thesisAdvisorMappings.push({ thesis_id: thesis.id, advisor });
+        thesisAdvisorMappings.push({
+          thesis_id: thesis.id,
+          advisor_name: advisor,
+        });
       }
     }
     await insertInBatches(
