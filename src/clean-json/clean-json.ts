@@ -453,12 +453,12 @@ function cleanThesis(thesis: ThesisExtended) {
     thesis.institute = thesis.institute.trim();
   }
 
-  if (thesis.branch) {
-    thesis.branch = thesis.branch.trim();
-  }
-
   if (thesis.department) {
     thesis.department = thesis.department.trim();
+  }
+
+  if (thesis.branch) {
+    thesis.branch = thesis.branch.trim();
   }
 
   if (
@@ -636,7 +636,7 @@ function cleanThesis(thesis: ThesisExtended) {
     page_count: thesis.pages,
     pdf_url: thesis.pdf_url,
     department: thesis.department,
-    branch: thesis.department,
+    branch: thesis.branch,
   });
   return { thesis: cleanedThesis, problemsCount };
 }
