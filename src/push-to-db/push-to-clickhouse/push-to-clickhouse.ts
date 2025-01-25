@@ -1,14 +1,13 @@
-import { createClient } from "@clickhouse/client";
-import { NodeClickHouseClient } from "@clickhouse/client/dist/client";
 import { config } from "dotenv";
+config();
+import { NodeClickHouseClient } from "@clickhouse/client/dist/client";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSchema } from "./create-schema";
 import { TFinalThesis } from "../../clean-json/schema";
 import pRetry from "p-retry";
-
-config();
+import { client } from "./client";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,12 +60,6 @@ async function insertInBatches<T>(
 }
 
 async function main(): Promise<void> {
-  const client = createClient({
-    url: process.env.CLICKHOUSE_URL || "http://localhost:8123",
-    username: process.env.CLICKHOUSE_USERNAME || "default",
-    password: process.env.CLICKHOUSE_PASSWORD || "",
-  });
-
   const batchSize = parseInt(process.env.BATCH_SIZE || "10000", 10); // Default batch size: 1000
 
   const theses: TFinalThesis[] = [];

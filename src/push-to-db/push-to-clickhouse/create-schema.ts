@@ -1,4 +1,8 @@
 import { NodeClickHouseClient } from "@clickhouse/client/dist/client";
+import { client } from "./client";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
 
 export async function createSchema(
   client: NodeClickHouseClient
@@ -84,6 +88,8 @@ export async function createSchema(
           INNER JOIN thesis_keywords tk ON t.id = tk.thesis_id
           INNER JOIN keywords k ON tk.keyword_name = k.name
           GROUP BY t.university, tk.keyword_name, k.language`,
+
+    `DROP TABLE IF EXISTS university_stats`,
   ];
 
   for (const query of queries) {
@@ -94,4 +100,11 @@ export async function createSchema(
       console.error("Error creating table:", err);
     }
   }
+}
+
+if (process.argv[1] === __filename) {
+  createSchema(client).catch((err) => {
+    console.error("Unhandled error in main:", err);
+    process.exit(1);
+  });
 }
