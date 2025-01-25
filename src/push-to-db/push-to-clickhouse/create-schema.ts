@@ -107,6 +107,8 @@ export async function createSchema(
 	        MAX(year) AS year_end
       FROM theses
       GROUP BY university`,
+
+    `DROP TABLE IF EXISTS university_stats`,
   ];
 
   for (const query of queries) {
