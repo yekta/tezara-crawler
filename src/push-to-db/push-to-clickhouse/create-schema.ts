@@ -58,7 +58,8 @@ export async function createSchema(
     ORDER BY (thesis_id, advisor_name)`,
 
     `DROP TABLE IF EXISTS thesis_subject_counts`,
-    `CREATE MATERIALIZED VIEW thesis_subject_counts
+    `DROP TABLE IF EXISTS thesis_subject_stats`,
+    `CREATE MATERIALIZED VIEW thesis_subject_stats
       ENGINE = SummingMergeTree()
       ORDER BY (university, subject_name, subject_language)
       POPULATE
@@ -74,7 +75,8 @@ export async function createSchema(
           GROUP BY t.university, ts.subject_name, s.language`,
 
     `DROP TABLE IF EXISTS thesis_keyword_counts`,
-    `CREATE MATERIALIZED VIEW IF NOT EXISTS thesis_keyword_counts
+    `DROP TABLE IF EXISTS thesis_keyword_stats`,
+    `CREATE MATERIALIZED VIEW IF NOT EXISTS thesis_keyword_stats
       ENGINE = SummingMergeTree()
       ORDER BY (university, keyword_name, keyword_language)
       POPULATE
@@ -89,7 +91,22 @@ export async function createSchema(
           INNER JOIN keywords k ON tk.keyword_name = k.name
           GROUP BY t.university, tk.keyword_name, k.language`,
 
-    `DROP TABLE IF EXISTS university_stats`,
+    `DROP TABLE IF EXISTS universities`,
+    `CREATE MATERIALIZED VIEW IF NOT EXISTS universities
+      ENGINE = SummingMergeTree()
+      ORDER BY (university)
+      POPULATE
+      AS
+      SELECT 
+          university,
+          COUNT() AS thesis_count,
+          COUNT(DISTINCT language) AS language_count,
+          COUNT(DISTINCT author) AS author_count,
+          COUNT(DISTINCT thesis_type) AS thesis_type_count,
+          MIN(year) AS year_start,
+	        MAX(year) AS year_end
+      FROM theses
+      GROUP BY university`,
   ];
 
   for (const query of queries) {
