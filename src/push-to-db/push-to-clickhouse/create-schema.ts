@@ -94,19 +94,31 @@ export async function createSchema(
     `DROP TABLE IF EXISTS universities`,
     `CREATE MATERIALIZED VIEW IF NOT EXISTS universities
       ENGINE = SummingMergeTree()
-      ORDER BY (university)
+      ORDER BY (name)
       POPULATE
       AS
-      SELECT 
-          university,
-          COUNT() AS thesis_count,
-          COUNT(DISTINCT language) AS language_count,
-          COUNT(DISTINCT author) AS author_count,
-          COUNT(DISTINCT thesis_type) AS thesis_type_count,
-          MIN(year) AS year_start,
-	        MAX(year) AS year_end
-      FROM theses
-      GROUP BY university`,
+      SELECT
+          t.university AS name,
+          countDistinct(t.id) AS thesis_count,
+          countDistinct(t.language) AS language_count,
+          countDistinct(t.author) AS author_count,
+          countDistinct(t.thesis_type) AS thesis_type_count,
+          countDistinctIf(tk.keyword_name, k.language = 'Turkish' OR k.language IS NULL) AS turkish_keyword_count,
+          countDistinctIf(ts.subject_name, s.language = 'Turkish' OR s.language IS NULL) AS turkish_subject_count,
+          countDistinctIf(tk.keyword_name, k.language = 'English' OR k.language IS NULL) AS english_keyword_count,
+          countDistinctIf(ts.subject_name, s.language = 'English' OR s.language IS NULL) AS english_subject_count,
+          MIN(t.year) AS year_start,
+          MAX(t.year) AS year_end
+      FROM theses t
+      LEFT JOIN thesis_keywords tk
+          ON t.id = tk.thesis_id
+      LEFT JOIN thesis_subjects ts
+          ON t.id = ts.thesis_id
+      LEFT JOIN keywords AS k
+          ON k.name = tk.keyword_name
+      LEFT JOIN subjects AS s
+          ON s.name = ts.subject_name
+      GROUP BY t.university`,
 
     `DROP TABLE IF EXISTS university_stats`,
   ];
