@@ -106,10 +106,10 @@ export async function createSchema(
           countDistinct(t.institute) AS institute_count,
           countDistinct(t.department) AS department_count,
           countDistinct(t.branch) AS branch_count,
-          countDistinctIf(tk.keyword_name, k.language = 'Turkish' OR k.language IS NULL) AS turkish_keyword_count,
-          countDistinctIf(ts.subject_name, s.language = 'Turkish' OR s.language IS NULL) AS turkish_subject_count,
-          countDistinctIf(tk.keyword_name, k.language = 'English' OR k.language IS NULL) AS english_keyword_count,
-          countDistinctIf(ts.subject_name, s.language = 'English' OR s.language IS NULL) AS english_subject_count,
+          countDistinctIf(tk.keyword_name, k.language = 'Turkish' OR k.language IS NULL) AS keyword_count_turkish,
+          countDistinctIf(ts.subject_name, s.language = 'Turkish' OR s.language IS NULL) AS subject_count_turkish,
+          countDistinctIf(tk.keyword_name, k.language = 'English' OR k.language IS NULL) AS keyword_count_english,
+          countDistinctIf(ts.subject_name, s.language = 'English' OR s.language IS NULL) AS subject_count_english,
           MIN(t.year) AS year_start,
           MAX(t.year) AS year_end
       FROM theses t
