@@ -23,9 +23,12 @@ git clone https://github.com/yekta/tezara-crawler.git
 cd tezara-crawler
 npm install
 
+echo "BEFORE RCLONE"
 # Install rclone
 echo "Installing rclone..."
 sudo -v && curl https://rclone.org/install.sh | sudo bash
+
+echo "AFTER RCLONE"
 
 # Get the env content
 echo -e "\nPaste your .env content and press Enter twice:"
@@ -34,6 +37,8 @@ while IFS= read -r line; do
     [[ -z "$line" ]] && break
     env_content+="$line"$'\n'
 done
+
+echo "AFTER ENV_CONTENT"
 
 # Save to .env
 echo "$env_content" > .env
