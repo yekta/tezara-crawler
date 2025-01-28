@@ -10,11 +10,14 @@ echo "Installing NVM..."
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-source "$HOME/.nvm/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+source "$NVM_DIR/nvm.sh"
 
 # Install Node.js
 echo "Installing Node.js 22..."
 nvm install 22
+nvm use 22
+nvm alias default 22
 
 # Clone and setup
 echo "Cloning repository..."
@@ -23,24 +26,29 @@ git clone https://github.com/yekta/tezara-crawler.git
 cd tezara-crawler
 npm install
 
-echo "BEFORE RCLONE"
-# Install rclone
-echo "Installing rclone..."
-sudo -v && curl https://rclone.org/install.sh | sudo bash
+# Check if rclone is already installed
+if command -v rclone &> /dev/null; then
+    echo "rclone is already installed. Skipping installation."
+else
+    echo "Installing rclone..."
+    sudo -v && curl https://rclone.org/install.sh | sudo bash
+fi
 
-echo "AFTER RCLONE"
-
-# Get the env content
-echo -e "\nPaste your .env content and press Enter twice:"
+# Prompt for .env content
+echo -e "\nPaste your .env content below (end with an empty line):"
 env_content=""
-while IFS= read -r line; do
-    [[ -z "$line" ]] && break
+while IFS= read -r line < /dev/tty; do
+    [[ -z "$line" ]] && break  # Exit the loop if an empty line is entered
     env_content+="$line"$'\n'
 done
 
-echo "AFTER ENV_CONTENT"
+# Check if no content was captured
+if [[ -z "$env_content" ]]; then
+    echo "No .env content was provided. Exiting."
+    exit 1
+fi
 
-# Save to .env
+echo "Saving .env content..."
 echo "$env_content" > .env
 
 # Parse R2 credentials
@@ -61,7 +69,12 @@ acl = private
 EOL
 
 # Copy files using rclone
-echo "Copying files from R2..."
-rclone copy tezara:tezara-crawler .
+echo "Checking if directory exists in R2..."
+if rclone lsf tezara:tezara-crawler &> /dev/null; then
+    echo "Directory exists. Copying files with verbose output..."
+    rclone -v copy tezara:tezara-crawler .
+else
+    echo "Directory not found in R2. Skipping copy operation."
+fi
 
 echo "Setup complete!"
