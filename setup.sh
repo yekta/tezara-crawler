@@ -1,13 +1,6 @@
 #!/bin/bash
 set -e  # Exit on error
 
-# Function to prompt for input
-prompt_input() {
-    local prompt="$1"
-    local variable="$2"
-    read -p "$prompt: " $variable
-}
-
 # Ensure we're in the home directory
 cd ~
 
@@ -50,30 +43,33 @@ sudo -v && curl https://rclone.org/install.sh | sudo bash
 # Create rclone config directory if it doesn't exist
 mkdir -p ~/.config/rclone
 
-# Prompt for AWS credentials
-echo "Please enter your Cloudflare R2 credentials:"
-prompt_input "Access Key ID" access_key_id
-prompt_input "Secret Access Key" secret_access_key
-prompt_input "Endpoint (format: https://<accountid>.r2.cloudflarestorage.com)" endpoint
+# Handle .env file
+echo "Please paste your environment variables (including R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_ENDPOINT) then press Ctrl+D:"
+env_content=$(cat)
 
-# Create rclone config file
+# Save .env file
+echo "$env_content" > .env
+
+# Extract R2 credentials from .env file
+eval "$(cat .env | sed 's/^/export /')"
+
+# Verify R2 credentials are present
+if [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_ENDPOINT" ]; then
+    echo "Error: R2 credentials not found in .env file. Please ensure R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_ENDPOINT are set."
+    exit 1
+fi
+
+# Create rclone config file using values from .env
 echo "Configuring rclone..."
 cat > ~/.config/rclone/rclone.conf << EOL
 [tezara]
 type = s3
 provider = Cloudflare
-access_key_id = $access_key_id
-secret_access_key = $secret_access_key
-endpoint = $endpoint
+access_key_id = $R2_ACCESS_KEY_ID
+secret_access_key = $R2_SECRET_ACCESS_KEY
+endpoint = $R2_ENDPOINT
 acl = private
 EOL
-
-# Handle .env file
-echo "Please paste your environment variables (press Ctrl+D when done):"
-env_content=$(cat)
-
-# Create .env file
-echo "$env_content" > .env
 
 # Copy files using rclone
 echo "Copying files from S3..."
