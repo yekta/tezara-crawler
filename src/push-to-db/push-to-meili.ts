@@ -62,7 +62,7 @@ const indexes: Record<
     sortable: ["id", "year"],
     shape: (doc) => doc,
     batchSize: 2_000,
-    xOrder: -1,
+    xOrder: -1000,
   },
   universities: {
     maxTotalHits: 5_000,
@@ -132,6 +132,7 @@ const indexes: Record<
         id: md5Hash(name),
       })),
     batchSize: 20_000,
+    xOrder: -100,
   },
   subjects: {
     maxTotalHits: 5_000,
