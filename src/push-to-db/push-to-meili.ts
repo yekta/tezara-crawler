@@ -128,6 +128,7 @@ const indexes: Record<
     shape: (doc) =>
       doc.keywords.map(({ name, ...rest }) => ({
         ...rest,
+        name,
         id: md5Hash(name),
       })),
     batchSize: 20_000,
@@ -139,6 +140,7 @@ const indexes: Record<
     shape: (doc) =>
       doc.subjects.map(({ name, ...rest }) => ({
         ...rest,
+        name,
         id: md5Hash(name),
       })),
   },
