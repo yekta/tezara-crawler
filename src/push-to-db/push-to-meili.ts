@@ -107,6 +107,7 @@ const indexes: Record<
     filterable: ["name"],
     shape: (doc) => ({ name: doc.author, id: md5Hash(doc.author) }),
     batchSize: 20_000,
+    xOrder: -10,
   },
   advisors: {
     maxTotalHits: 5_000,
@@ -114,6 +115,7 @@ const indexes: Record<
     filterable: ["name"],
     shape: (doc) => doc.advisors.map((name) => ({ name, id: md5Hash(name) })),
     batchSize: 20_000,
+    xOrder: -10,
   },
   thesis_types: {
     maxTotalHits: 5_000,
