@@ -57,9 +57,8 @@ export async function createSchema(
     ) ENGINE = MergeTree()
     ORDER BY (thesis_id, advisor_name)`,
 
-    `DROP TABLE IF EXISTS thesis_subject_counts`,
-    `DROP TABLE IF EXISTS thesis_subject_stats`,
-    `CREATE MATERIALIZED VIEW thesis_subject_stats
+    `DROP TABLE IF EXISTS thesis_subjects_by_university`,
+    `CREATE MATERIALIZED VIEW thesis_subjects_by_university
       ENGINE = SummingMergeTree()
       ORDER BY (university, subject_name, subject_language)
       POPULATE
@@ -74,9 +73,8 @@ export async function createSchema(
           INNER JOIN subjects s ON ts.subject_name = s.name
           GROUP BY t.university, ts.subject_name, s.language`,
 
-    `DROP TABLE IF EXISTS thesis_keyword_counts`,
-    `DROP TABLE IF EXISTS thesis_keyword_stats`,
-    `CREATE MATERIALIZED VIEW IF NOT EXISTS thesis_keyword_stats
+    `DROP TABLE IF EXISTS thesis_keywords_by_university`,
+    `CREATE MATERIALIZED VIEW IF NOT EXISTS thesis_keywords_by_university
       ENGINE = SummingMergeTree()
       ORDER BY (university, keyword_name, keyword_language)
       POPULATE
@@ -121,9 +119,49 @@ export async function createSchema(
           ON k.name = tk.keyword_name
       LEFT JOIN subjects AS s
           ON s.name = ts.subject_name
-      GROUP BY t.university`,
+      GROUP BY t.university
+      ORDER BY thesis_count DESC`,
 
-    `DROP TABLE IF EXISTS university_stats`,
+    `DROP TABLE IF EXISTS subject_stats`,
+    `CREATE MATERIALIZED VIEW IF NOT EXISTS subject_stats
+      ENGINE = SummingMergeTree()
+      ORDER BY (name)
+      POPULATE
+      AS
+      SELECT
+        s.name AS name,
+        s.language AS language,
+        countDistinct (t.id) AS thesis_count,
+        countDistinct (t.language) AS language_count,
+        countDistinct (t.author) AS author_count,
+        countDistinct (t.thesis_type) AS thesis_type_count,
+        countDistinct (t.university) AS university_count,
+        countDistinct (t.institute) AS institute_count,
+        countDistinct (t.department) AS department_count,
+        countDistinct (t.branch) AS branch_count,
+        countDistinctIf (
+          tk.keyword_name,
+          k.language = 'Turkish'
+          OR k.language IS NULL
+        ) AS keyword_count_turkish,
+        countDistinctIf (
+          tk.keyword_name,
+          k.language = 'English'
+          OR k.language IS NULL
+        ) AS keyword_count_english,
+        MIN(t.year) AS year_start,
+        MAX(t.year) AS year_end
+      FROM
+        theses t
+        LEFT JOIN thesis_keywords tk ON t.id = tk.thesis_id
+        INNER JOIN thesis_subjects ts ON t.id = ts.thesis_id
+        LEFT JOIN keywords AS k ON k.name = tk.keyword_name
+        INNER JOIN subjects AS s ON s.name = ts.subject_name
+      GROUP BY
+        s.name,
+        s.language
+      ORDER BY
+        thesis_count DESC`,
   ];
 
   for (const query of queries) {
