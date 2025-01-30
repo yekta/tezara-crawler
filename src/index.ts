@@ -20,6 +20,7 @@ async function mainLoop() {
   try {
     browser = await puppeteer.launch({
       headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
     const page = await browser.newPage();
     await page.goto(config.baseUrl);
