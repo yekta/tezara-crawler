@@ -3,15 +3,10 @@ export type University = {
   name: string;
 };
 
-export type Institute = {
+export type Subject = {
   id: string;
   name: string;
 };
-
-export interface ThesisType {
-  id: string;
-  name: string;
-}
 
 export interface CrawlerConfig {
   baseUrl: string;
