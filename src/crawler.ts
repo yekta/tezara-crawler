@@ -175,6 +175,9 @@ export async function crawlCombination({
           `📜🟢 Created HTML file | ${university.name} | ${year} | ${subject.name}`
         );
       } else {
+        logger.info(
+          `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${subject.name}`
+        );
         logger.warn(
           `SUBJECTS | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${subject.name}`
         );
@@ -236,6 +239,9 @@ export async function crawlCombination({
           `📜🟢 Created HTML file | ${university.name} | ${year} | ${thesisType.name}`
         );
       } else {
+        logger.info(
+          `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${thesisType.name}`
+        );
         logger.warn(
           `THESIS_TYPE | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${thesisType.name}`
         );
