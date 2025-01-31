@@ -193,7 +193,7 @@ export async function crawlCombination({
         page,
         university,
         year,
-        thesisType, // Fixed: Pass thesis type to search
+        thesisType,
       });
 
     if (thesisTypeRecordCount === 0) {
@@ -213,58 +213,93 @@ export async function crawlCombination({
 
       // If still over limit, check each institute separately with thesis type
       for (const institute of institutes) {
-        const { html: instituteHtml, recordCount: instituteRecordCount } =
-          await safeSearchTheses({
-            page,
-            university,
-            institute,
-            year,
-            thesisType,
-          });
+        try {
+          const { html: instituteHtml, recordCount: instituteRecordCount } =
+            await safeSearchTheses({
+              page,
+              university,
+              institute,
+              year,
+              thesisType,
+            });
 
-        if (instituteRecordCount > 0) {
-          const filepath = generateFilePath({
-            dir: config.downloadDir,
-            university,
-            institute,
-            thesisType,
-            year,
-          });
-          await fs.writeFile(filepath, instituteHtml);
-          logger.info(
-            `📜🟢 Created HTML file | ${university.name} | ${institute.name} | ${thesisType.name} | ${year}`
+          if (instituteRecordCount > 0) {
+            const filepath = generateFilePath({
+              dir: config.downloadDir,
+              university,
+              institute,
+              thesisType,
+              year,
+            });
+            await fs.writeFile(filepath, instituteHtml);
+            logger.info(
+              `📜🟢 Created HTML file | ${university.name} | ${institute.name} | ${thesisType.name} | ${year}`
+            );
+
+            // Only mark as crawled after successful file write
+            await markInstituteAsCrawled({
+              university,
+              institute,
+              thesisType,
+              year,
+              progressFile: config.progressFile,
+            });
+          }
+        } catch (error) {
+          logger.error(
+            `Failed to process institute: ${university.name} | ${institute.name} | ${thesisType.name} | ${year}`,
+            error
           );
+          // Don't mark as crawled if there was an error
+          throw error; // Re-throw to trigger retry
         }
-
-        await markInstituteAsCrawled({
-          university,
-          institute,
-          thesisType,
-          year,
-          progressFile: config.progressFile,
-        });
       }
-    } else {
-      // Save thesis type level results
-      const filepath = generateFilePath({
-        dir: config.downloadDir,
-        university,
-        thesisType,
-        year,
-      });
-      await fs.writeFile(filepath, thesisTypeHtml);
-      logger.info(
-        `📜🟢 Created HTML file | ${university.name} | ${thesisType.name} | ${year}`
-      );
 
+      // Only mark thesis type as crawled after ALL institutes are done
       await markThesisTypeAsCrawled({
         university,
         year,
         thesisType,
         progressFile: config.progressFile,
       });
+    } else {
+      try {
+        // Save thesis type level results
+        const filepath = generateFilePath({
+          dir: config.downloadDir,
+          university,
+          thesisType,
+          year,
+        });
+        await fs.writeFile(filepath, thesisTypeHtml);
+        logger.info(
+          `📜🟢 Created HTML file | ${university.name} | ${thesisType.name} | ${year}`
+        );
+
+        // Only mark as crawled after successful file write
+        await markThesisTypeAsCrawled({
+          university,
+          year,
+          thesisType,
+          progressFile: config.progressFile,
+        });
+      } catch (error) {
+        logger.error(
+          `Failed to process thesis type: ${university.name} | ${thesisType.name} | ${year}`,
+          error
+        );
+        // Don't mark as crawled if there was an error
+        throw error; // Re-throw to trigger retry
+      }
     }
   }
+
+  // Only mark university as fully crawled after ALL thesis types are done
+  await markUniversityAsCrawled({
+    university,
+    year,
+    progressFile: config.progressFile,
+  });
 }
 
 function generateFilePath({
