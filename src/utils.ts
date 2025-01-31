@@ -13,7 +13,15 @@ export const sleep = (ms: number): Promise<void> =>
 export const getPath = (name: string): string =>
   path.join(path.dirname(__dirname), name);
 
-export const getKey = ({
+export const getUniversityYearKey = ({
+  university,
+  year,
+}: {
+  university: University;
+  year: string;
+}): string => `${university.id}|||${university.name}|||${year}`;
+
+export const getInstituteKey = ({
   university,
   institute,
   year,
@@ -37,27 +45,45 @@ export const isAlreadyCrawled = async ({
 }): Promise<boolean> => {
   try {
     const progress = await fs.readFile(getPath(progressFile), "utf-8");
-    const key = getKey({ university, institute, year });
-    return progress.includes(key);
+    // Check if we have a university-level entry
+    const uniKey = getUniversityYearKey({ university, year });
+    if (progress.includes(uniKey)) {
+      return true;
+    }
+    // If not, check for specific institute entry
+    const instKey = getInstituteKey({ university, institute, year });
+    return progress.includes(instKey);
   } catch {
     return false;
   }
 };
 
-export const markAsCrawled = async ({
+export const markUniversityYearAsCrawled = async ({
+  university,
+  year,
+  progressFile,
+}: {
+  university: University;
+  year: string;
+  progressFile: string;
+}): Promise<void> => {
+  const key = getUniversityYearKey({ university, year });
+  logger.info(`🖊️ Marking university+year as crawled | ${key}`);
+  await fs.appendFile(getPath(progressFile), key + "\n");
+};
+
+export const markInstituteAsCrawled = async ({
   university,
   institute,
   year,
   progressFile,
-  log = true,
 }: {
   university: University;
   institute: Institute;
   year: string;
   progressFile: string;
-  log?: boolean;
 }): Promise<void> => {
-  const key = getKey({ university, institute, year });
-  if (log) logger.info(`🖊️ Marking as crawled | ${key}`);
+  const key = getInstituteKey({ university, institute, year });
+  logger.info(`🖊️ Marking institute as crawled | ${key}`);
   await fs.appendFile(getPath(progressFile), key + "\n");
 };

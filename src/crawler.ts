@@ -5,7 +5,11 @@ import type { Page } from "puppeteer";
 import { config } from "./config";
 import { logger } from "./logger";
 import type { CrawlerConfig, Institute, University } from "./types";
-import { getPath, markAsCrawled } from "./utils";
+import {
+  getPath,
+  markInstituteAsCrawled,
+  markUniversityYearAsCrawled,
+} from "./utils";
 
 const MAX_RECORD_COUNT = 2000;
 const MIN_YEAR = 1940;
@@ -143,7 +147,7 @@ export const crawlCombination = async (
         );
       }
 
-      await markAsCrawled({
+      await markInstituteAsCrawled({
         university,
         institute,
         year,
@@ -159,28 +163,20 @@ export const crawlCombination = async (
     await fs.writeFile(filepath, html);
     logger.info(`📜🟢 Created HTML file | ${university.name} | ${year}`);
 
-    // Mark all institute combinations as crawled since we got university-level results
-    for (const institute of institutes) {
-      await markAsCrawled({
-        university,
-        institute,
-        year,
-        progressFile: config.progressFile,
-        log: false,
-      });
-    }
+    // Just mark the university+year as crawled, no need to mark individual institutes
+    await markUniversityYearAsCrawled({
+      university,
+      year,
+      progressFile: config.progressFile,
+    });
   } else {
     logger.info(`📜🟡 No results found | ${university.name} | ${year}`);
-    // Mark all institute combinations as crawled since there are no results
-    for (const institute of institutes) {
-      await markAsCrawled({
-        university,
-        institute,
-        year,
-        progressFile: config.progressFile,
-        log: false,
-      });
-    }
+    // Just mark the university+year as crawled since there are no results
+    await markUniversityYearAsCrawled({
+      university,
+      year,
+      progressFile: config.progressFile,
+    });
   }
 };
 
