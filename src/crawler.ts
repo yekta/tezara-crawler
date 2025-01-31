@@ -92,123 +92,6 @@ export const getInstitutes = async (page: Page): Promise<Institute[]> => {
   return institutes;
 };
 
-export const selectUniversity = async (
-  page: Page,
-  university: University
-): Promise<void> => {
-  logger.info(
-    `🔍 Selecting university: ${university.name} (ID: ${university.id})`
-  );
-
-  // Clear any existing selection first
-  await page.evaluate(() => {
-    const input = document.querySelector(
-      'input[name="uniad"]'
-    ) as HTMLInputElement;
-    if (input) input.value = "";
-  });
-
-  const [popup] = await Promise.all([
-    new Promise<Page | null>((resolve) =>
-      page.browser().once("targetcreated", async (target) => {
-        const newPage = await target.page();
-        resolve(newPage);
-      })
-    ),
-    page.click('input[onclick="uniEkle();"]'),
-  ]);
-
-  if (!popup) {
-    throw new Error("Failed to open university selection popup");
-  }
-
-  logger.info("Popup opened, waiting for content...");
-  await popup.waitForSelector("table#sf", { timeout: 10000 });
-
-  logger.info("Popup content loaded, selecting university...");
-  await popup.evaluate((uni) => {
-    const selector = `a[onclick*="eklecikar('${uni.name}','${uni.id}')"]`;
-    const link = document.querySelector(selector);
-    if (link) {
-      (link as HTMLElement).click();
-    }
-  }, university);
-
-  await popup.close();
-
-  logger.info("Waiting for university selection to reflect...");
-  await page.waitForFunction(
-    (uniName) => {
-      const input = document.querySelector(
-        'input[name="uniad"]'
-      ) as HTMLInputElement;
-      return input && input.value === uniName;
-    },
-    {},
-    university.name
-  );
-
-  logger.info(`Selected university: ${university.name}`);
-};
-
-export const selectInstitute = async (
-  page: Page,
-  institute: Institute
-): Promise<void> => {
-  logger.info(
-    `🏛️ Selecting institute: ${institute.name} (ID: ${institute.id})`
-  );
-
-  // Clear any existing selection first
-  await page.evaluate(() => {
-    const input = document.querySelector(
-      'input[name="ensad"]'
-    ) as HTMLInputElement;
-    if (input) input.value = "";
-  });
-
-  const [popup] = await Promise.all([
-    new Promise<Page | null>((resolve) =>
-      page.browser().once("targetcreated", async (target) => {
-        const newPage = await target.page();
-        resolve(newPage);
-      })
-    ),
-    page.click('input[onclick="ensEkle();"]'),
-  ]);
-
-  if (!popup) {
-    throw new Error("Failed to open institute selection popup");
-  }
-
-  logger.info("Popup opened, waiting for content...");
-  await popup.waitForSelector("table#sf", { timeout: 10000 });
-
-  logger.info("Popup content loaded, selecting institute...");
-  await popup.evaluate((inst) => {
-    const selector = `a[onclick*="eklecikar('${inst.name}','${inst.id}')"]`;
-    const link = document.querySelector(selector);
-    if (link) {
-      (link as HTMLElement).click();
-    }
-  }, institute);
-
-  await popup.close();
-
-  await page.waitForFunction(
-    (instName) => {
-      const input = document.querySelector(
-        'input[name="ensad"]'
-      ) as HTMLInputElement;
-      return input && input.value === instName;
-    },
-    {},
-    institute.name
-  );
-
-  logger.info(`Selected institute: ${institute.name}`);
-};
-
 export const getYears = async (page: Page): Promise<string[]> => {
   logger.info(`📅 Getting available years...`);
   const years = await page.evaluate(() => {
@@ -250,7 +133,7 @@ export const crawlCombination = async (
   });
 };
 
-export const searchTheses = async (
+const searchTheses = async (
   page: Page,
   university: University,
   institute: Institute,
@@ -267,27 +150,34 @@ export const searchTheses = async (
     });
   }
 
-  // Select university first
-  await selectUniversity(page, university);
+  await page.evaluate(
+    (uni, inst, yr) => {
+      const universeInput = document.querySelector(
+        'input[name="Universite"]'
+      ) as HTMLInputElement;
+      const instituteInput = document.querySelector(
+        'input[name="Enstitu"]'
+      ) as HTMLInputElement;
+      const year1Select = document.querySelector(
+        'select[name="yil1"]'
+      ) as HTMLSelectElement;
+      const year2Select = document.querySelector(
+        'select[name="yil2"]'
+      ) as HTMLSelectElement;
+      const form = document.querySelector(
+        'form[name="GForm"]'
+      ) as HTMLFormElement;
 
-  // Then select institute
-  await selectInstitute(page, institute);
-
-  await page.evaluate((yr) => {
-    const year1Select = document.querySelector(
-      'select[name="yil1"]'
-    ) as HTMLSelectElement;
-    const year2Select = document.querySelector(
-      'select[name="yil2"]'
-    ) as HTMLSelectElement;
-    const form = document.querySelector(
-      'form[name="GForm"]'
-    ) as HTMLFormElement;
-
-    if (year1Select) year1Select.value = yr;
-    if (year2Select) year2Select.value = yr;
-    form?.submit();
-  }, year);
+      if (universeInput) universeInput.value = uni;
+      if (instituteInput) instituteInput.value = inst;
+      if (year1Select) year1Select.value = yr;
+      if (year2Select) year2Select.value = yr;
+      form?.submit();
+    },
+    university.id,
+    institute.id,
+    year
+  );
 
   try {
     await page.waitForNavigation({
@@ -345,7 +235,7 @@ export const searchTheses = async (
   return html;
 };
 
-export const safeSearchTheses = async (
+const safeSearchTheses = async (
   page: Page,
   university: University,
   institute: Institute,
