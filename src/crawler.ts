@@ -1,11 +1,10 @@
-// crawler.ts
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import pRetry from "p-retry";
 import type { Page } from "puppeteer";
 import { config } from "./config";
 import { logger } from "./logger";
-import type { CrawlerConfig, University, Institute } from "./types";
+import type { CrawlerConfig, Institute, University } from "./types";
 import { getPath, markAsCrawled } from "./utils";
 
 const MAX_RECORD_COUNT = 2000;
@@ -109,50 +108,78 @@ export const getYears = async (page: Page): Promise<string[]> => {
 export const crawlCombination = async (
   page: Page,
   university: University,
-  institute: Institute,
+  institutes: Institute[],
   year: string,
   config: CrawlerConfig
 ): Promise<void> => {
-  logger.info(
-    `🎓 Crawling ${university.name} - ${institute.name} for year ${year}`
-  );
-  const { html, recordCount } = await safeSearchTheses(
+  logger.info(`🎓 Checking ${university.name} for year ${year}`);
+
+  // First try university + year combination
+  const { html, recordCount } = await safeSearchByUniversityAndYear(
     page,
     university,
-    institute,
     year
   );
-  if (!html) {
-    logger.error(
-      `❌ No HTML content found for ${university.name} - ${institute.name}, Year: ${year}`
-    );
-    throw new Error(
-      `No HTML content found for ${university.name} - ${institute.name}, Year: ${year}`
-    );
-  }
 
-  if (recordCount > 0) {
+  if (recordCount > MAX_RECORD_COUNT) {
+    logger.info(
+      `⚠️ Record count (${recordCount}) exceeds limit of ${MAX_RECORD_COUNT} for ${university.name}, Year: ${year}. Checking individual institutes...`
+    );
+
+    // If over limit, check each institute separately
+    for (const institute of institutes) {
+      const { html: instituteHtml, recordCount: instituteRecordCount } =
+        await safeSearchTheses(page, university, institute, year);
+
+      if (instituteRecordCount > 0) {
+        const encodedUniversityName = encodeURIComponent(university.name);
+        const encodedInstituteName = encodeURIComponent(institute.name);
+        const separator = "___";
+        const filename = `${encodedUniversityName}${separator}${university.id}${separator}${encodedInstituteName}${separator}${institute.id}${separator}${year}.html`;
+        const filepath = path.join(getPath(config.downloadDir), filename);
+        await fs.writeFile(filepath, instituteHtml);
+        logger.info(
+          `📜🟢 Created HTML file | ${university.name} | ${institute.name} | ${year}`
+        );
+      }
+
+      await markAsCrawled({
+        university,
+        institute,
+        year,
+        progressFile: config.progressFile,
+      });
+    }
+  } else if (recordCount > 0) {
+    // If under limit, save the university-level results
     const encodedUniversityName = encodeURIComponent(university.name);
-    const encodedInstituteName = encodeURIComponent(institute.name);
     const separator = "___";
-    const filename = `${encodedUniversityName}${separator}${university.id}${separator}${encodedInstituteName}${separator}${institute.id}${separator}${year}.html`;
+    const filename = `${encodedUniversityName}${separator}${university.id}${separator}${year}.html`;
     const filepath = path.join(getPath(config.downloadDir), filename);
     await fs.writeFile(filepath, html);
-    logger.info(
-      `📜🟢 Created HTML file | ${university.name} | ${institute.name} | ${year}`
-    );
-  } else {
-    logger.info(
-      `📜🟡 Skipping creation of HTML file | ${university.name} | ${institute.name} | ${year}`
-    );
-  }
+    logger.info(`📜🟢 Created HTML file | ${university.name} | ${year}`);
 
-  await markAsCrawled({
-    university,
-    institute,
-    year,
-    progressFile: config.progressFile,
-  });
+    // Mark all institute combinations as crawled since we got university-level results
+    for (const institute of institutes) {
+      await markAsCrawled({
+        university,
+        institute,
+        year,
+        progressFile: config.progressFile,
+      });
+    }
+  } else {
+    logger.info(`📜🟡 No results found | ${university.name} | ${year}`);
+    // Mark all institute combinations as crawled since there are no results
+    for (const institute of institutes) {
+      await markAsCrawled({
+        university,
+        institute,
+        year,
+        progressFile: config.progressFile,
+      });
+    }
+  }
 };
 
 const searchTheses = async (
@@ -269,6 +296,109 @@ const safeSearchTheses = async (
     onFailedAttempt: (error) => {
       logger.warn(
         `Attempt ${error.attemptNumber} failed | ${university.name} | ${institute.name} | ${year} | ${error.retriesLeft} retries left.`
+      );
+    },
+  });
+};
+
+const searchByUniversityAndYear = async (
+  page: Page,
+  university: University,
+  year: string
+): Promise<{ html: string; recordCount: number }> => {
+  logger.info(`🔎 Searching theses for ${university.name}, Year: ${year}`);
+
+  if (page.url() !== config.baseUrl) {
+    await page.goto(config.baseUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 10000,
+    });
+  }
+
+  await page.evaluate(
+    (uni, yr) => {
+      const universeInput = document.querySelector(
+        'input[name="Universite"]'
+      ) as HTMLInputElement;
+      const year1Select = document.querySelector(
+        'select[name="yil1"]'
+      ) as HTMLSelectElement;
+      const year2Select = document.querySelector(
+        'select[name="yil2"]'
+      ) as HTMLSelectElement;
+      const form = document.querySelector(
+        'form[name="GForm"]'
+      ) as HTMLFormElement;
+
+      if (universeInput) universeInput.value = uni;
+      if (year1Select) year1Select.value = yr;
+      if (year2Select) year2Select.value = yr;
+      form?.submit();
+    },
+    university.id,
+    year
+  );
+
+  try {
+    await page.waitForNavigation({
+      waitUntil: "domcontentloaded",
+      timeout: 5000,
+    });
+  } catch (error) {
+    logger.error(
+      `Navigation failed for ${university.name}, Year: ${year}`,
+      error
+    );
+    throw error;
+  }
+
+  const isMaintenancePage = await page.evaluate(() => {
+    const bodyText = document.body.textContent || "";
+    return (
+      bodyText.includes("BAKIM CALISMASI") ||
+      bodyText.includes("undergoing maintenance")
+    );
+  });
+
+  if (isMaintenancePage) {
+    logger.warn(
+      `⚠️ Maintenance page detected for ${university.name}, Year: ${year}. Retrying later...`
+    );
+    throw new Error("Maintenance page detected");
+  }
+
+  const cleanedText = await page.evaluate(() => {
+    const textContent = document.body.textContent || "";
+    return textContent.replace(/\s+/g, " ").replace(/\n/g, " ").trim();
+  });
+
+  const match = cleanedText.match(/(\d+) kayıt/);
+  const recordCount = match ? parseInt(match[1], 10) : 0;
+  logger.info(`Found ${recordCount} records.`);
+
+  const html = await page.content();
+
+  if (!html.includes("getData()")) {
+    logger.error(
+      `❌ No getData() found for ${university.name}, Year: ${year}. Throwing error.`
+    );
+    throw new Error(`No getData() found for ${university.name}, Year: ${year}`);
+  }
+
+  return { html, recordCount };
+};
+
+const safeSearchByUniversityAndYear = async (
+  page: Page,
+  university: University,
+  year: string,
+  retries = 1
+) => {
+  return pRetry(() => searchByUniversityAndYear(page, university, year), {
+    retries,
+    onFailedAttempt: (error) => {
+      logger.warn(
+        `Attempt ${error.attemptNumber} failed | ${university.name} | ${year} | ${error.retriesLeft} retries left.`
       );
     },
   });

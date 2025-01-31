@@ -1,16 +1,15 @@
-// index.ts
 import { promises as fs } from "node:fs";
 import * as puppeteer from "puppeteer";
 import { config } from "./config";
 import {
-  getUniversities,
-  getInstitutes,
-  getYears,
   crawlCombination,
+  getInstitutes,
+  getUniversities,
+  getYears,
 } from "./crawler";
-import { getPath, isAlreadyCrawled } from "./utils";
 import { logger } from "./logger";
-import type { University, Institute } from "./types";
+import type { University } from "./types";
+import { getPath, isAlreadyCrawled } from "./utils";
 
 const main = async () => {
   await fs.mkdir(getPath(config.downloadDir), { recursive: true });
@@ -20,6 +19,7 @@ const main = async () => {
   mainLoop();
 };
 
+// index.ts
 async function mainLoop() {
   logger.info("🚀 Starting main loop...");
   let browser: puppeteer.Browser | undefined = undefined;
@@ -41,17 +41,15 @@ async function mainLoop() {
       `Found ${universities.length} universities, ${institutes.length} institutes, and ${years.length} years`
     );
 
-    // Generate all possible combinations and store them
+    // Generate university + year combinations
     const combinations: Array<{
       university: University;
-      institute: Institute;
       year: string;
     }> = [];
+
     for (const year of years) {
       for (const university of universities) {
-        for (const institute of institutes) {
-          combinations.push({ university, institute, year });
-        }
+        combinations.push({ university, year });
       }
     }
 
@@ -59,27 +57,29 @@ async function mainLoop() {
 
     // Process all combinations
     for (const combo of combinations) {
-      const isCrawled = await isAlreadyCrawled({
-        university: combo.university,
-        institute: combo.institute,
-        year: combo.year,
-        progressFile: config.progressFile,
+      // Check if any institute combination for this university and year is not crawled
+      const needsCrawling = await institutes.some(async (institute) => {
+        const isCrawled = await isAlreadyCrawled({
+          university: combo.university,
+          institute,
+          year: combo.year,
+          progressFile: config.progressFile,
+        });
+        return !isCrawled;
       });
 
-      if (isCrawled) {
+      if (!needsCrawling) {
         logger.info(
-          `\n⏭️ Already crawled | ${combo.university.name} | ${combo.institute.name} | ${combo.year}`
+          `\n⏭️ Already crawled all institutes | ${combo.university.name} | ${combo.year}`
         );
         continue;
       }
 
-      logger.info(
-        `\n🔄 Processing: ${combo.university.name} | ${combo.institute.name} | ${combo.year}`
-      );
+      logger.info(`\n🔄 Processing: ${combo.university.name} | ${combo.year}`);
       await crawlCombination(
         page,
         combo.university,
-        combo.institute,
+        institutes,
         combo.year,
         config
       );
