@@ -136,6 +136,7 @@ export const selectUniversity = async (
 
   await popup.close();
 
+  logger.info("Waiting for university selection to reflect...");
   await page.waitForFunction(
     (uniName) => {
       const input = document.querySelector(
