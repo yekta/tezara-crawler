@@ -75,7 +75,7 @@ export async function crawlCombination({
   logger.info(`🎓 Checking ${university.name} for year ${year}`);
 
   // First try university + year combination
-  const { html, recordCount } = await safeSearchByUniversityAndYear({
+  const { html, recordCount } = await searchAndCrawl({
     page,
     university,
     year,
@@ -91,22 +91,28 @@ export async function crawlCombination({
     return;
   }
 
-  if (recordCount <= MAX_RECORD_COUNT) {
-    // If under limit, save the university-level results and we're done
-    const filepath = generateFilePath({
-      dir: config.downloadDir,
-      university,
-      year,
-    });
-    await fs.writeFile(filepath, html);
-    logger.info(`📜🟢 Created HTML file | ${university.name} | ${year}`);
+  const uniAndYearFilePath = generateFilePath({
+    dir: config.downloadDir,
+    university,
+    year,
+  });
+  await fs.writeFile(uniAndYearFilePath, html);
 
+  if (recordCount <= MAX_RECORD_COUNT) {
+    // If under limit, mark as crawled and return
+    logger.info(
+      `📜🟢 Created HTML file, marking uni as crawled | ${university.name} | ${year}`
+    );
     await markUniversityAsCrawled({
       university,
       year,
       progressFile: config.progressFile,
     });
     return;
+  } else {
+    logger.info(
+      `📜🔵 Created HTML file, continuing to crawl | ${university.name} | ${year}`
+    );
   }
 
   // If we're here, we need to try with subjects
@@ -129,7 +135,7 @@ export async function crawlCombination({
       continue;
     }
 
-    const { html, recordCount } = await safeSearchThesesFull({
+    const { html, recordCount } = await searchAndCrawl({
       page,
       university,
       year,
@@ -146,7 +152,7 @@ export async function crawlCombination({
         year,
         progressFile: config.progressFile,
       });
-    } else if (recordCount <= MAX_RECORD_COUNT) {
+    } else {
       const filepath = generateFilePath({
         dir: config.downloadDir,
         university,
@@ -154,22 +160,25 @@ export async function crawlCombination({
         year,
       });
       await fs.writeFile(filepath, html);
-      logger.info(
-        `📜🟢 Created HTML file | ${university.name} | ${subject.name} | ${year}`
-      );
-      markSubjectAsCrawled({
-        university,
-        subject,
-        year,
-        progressFile: config.progressFile,
-      });
-    } else {
-      logger.warn(
-        `⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${subject.name} | ${year}`
-      );
-      throw new Error(
-        `🔴 This shouldn't have happened. Record count still exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${subject.name} | ${year}`
-      );
+
+      if (recordCount <= MAX_RECORD_COUNT) {
+        logger.info(
+          `📜🟢 Created HTML file | ${university.name} | ${subject.name} | ${year}`
+        );
+        markSubjectAsCrawled({
+          university,
+          subject,
+          year,
+          progressFile: config.progressFile,
+        });
+      } else {
+        logger.warn(
+          `⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${subject.name} | ${year}`
+        );
+        throw new Error(
+          `🔴 This shouldn't have happened. Record count still exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${subject.name} | ${year}`
+        );
+      }
     }
   }
 
@@ -203,7 +212,7 @@ function generateFilePath({
   return path.join(getPath(dir), parts.join("_") + ".html");
 }
 
-async function searchThesesFull({
+async function _searchAndCrawl({
   page,
   university,
   year,
@@ -212,10 +221,12 @@ async function searchThesesFull({
   page: Page;
   university: University;
   year: string;
-  subject: Subject;
+  subject?: Subject;
 }): Promise<{ html: string; recordCount: number }> {
   logger.info(
-    `🔎 Searching theses for ${university.name} - ${subject.name}, Year: ${year}`
+    `🔎 Searching theses | ${university.name} | Year: ${year}${
+      subject ? ` | ${subject.name}` : ""
+    }`
   );
 
   if (page.url() !== config.baseUrl) {
@@ -250,12 +261,14 @@ async function searchThesesFull({
       if (universeInput) universeInput.value = uni;
       if (year1Select) year1Select.value = yr;
       if (year2Select) year2Select.value = yr;
-      if (subjectInput) subjectInput.value = subject;
+
+      // If subject is provided, fill it
+      if (subjectInput && subject) subjectInput.value = subject;
       form?.submit();
     },
     university.id,
     year,
-    subject.name
+    subject?.name
   );
 
   try {
@@ -265,7 +278,9 @@ async function searchThesesFull({
     });
   } catch (error) {
     logger.error(
-      `Navigation failed for ${university.name} - ${subject.name}, Year: ${year}`,
+      `Navigation failed | ${university.name} | Year: ${year}${
+        subject ? ` | ${subject.name}` : ""
+      }`,
       error
     );
     throw error;
@@ -281,7 +296,9 @@ async function searchThesesFull({
 
   if (isMaintenancePage) {
     logger.warn(
-      `⚠️ Maintenance page detected for ${university.name} - ${subject.name}, Year: ${year}. Retrying later...`
+      `⚠️ Maintenance page detected | ${university.name} | Year: ${year}${
+        subject ? ` | ${subject.name}` : ""
+      } | Retrying later...`
     );
     throw new Error("Maintenance page detected");
   }
@@ -296,7 +313,9 @@ async function searchThesesFull({
   logger.info(`Found ${recordCount} records.`);
   if (recordCount > MAX_RECORD_COUNT) {
     logger.warn(
-      `⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${subject.name} | ${year}`
+      `⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${
+        university.name
+      } | Year: ${year}${subject ? ` | ${subject.name}` : ""}`
     );
   }
 
@@ -304,17 +323,21 @@ async function searchThesesFull({
 
   if (!html.includes("getData()")) {
     logger.error(
-      `❌ No getData() found for ${university.name} - ${subject.name}, Year: ${year}. Throwing error.`
+      `❌ No getData() found | ${university.name} | Year: ${year}${
+        subject ? ` | ${subject.name}` : ""
+      } | Throwing error.`
     );
     throw new Error(
-      `No getData() found for ${university.name} - ${subject.name}, Year: ${year}`
+      `No getData() found | ${university.name} | Year: ${year}${
+        subject ? ` | ${subject.name}` : ""
+      }`
     );
   }
 
   return { html, recordCount };
 }
 
-async function safeSearchThesesFull({
+async function searchAndCrawl({
   page,
   university,
   year,
@@ -324,131 +347,17 @@ async function safeSearchThesesFull({
   page: Page;
   university: University;
   year: string;
-  subject: Subject;
+  subject?: Subject;
   retries?: number;
 }) {
-  return pRetry(() => searchThesesFull({ page, university, subject, year }), {
+  return pRetry(() => _searchAndCrawl({ page, university, subject, year }), {
     retries,
     onFailedAttempt: (error) => {
       logger.warn(
-        `Attempt ${error.attemptNumber} failed | ${university.name} | ${subject.name} | ${year} | ${error.retriesLeft} retries left.`
+        `Attempt ${error.attemptNumber} failed | ${university.name} | ${year}${
+          subject ? ` | ${subject.name}` : ""
+        } | ${error.retriesLeft} retries left.`
       );
-    },
-  });
-}
-
-async function searchByUniversityAndYear({
-  page,
-  university,
-  year,
-}: {
-  page: Page;
-  university: University;
-  year: string;
-}): Promise<{ html: string; recordCount: number }> {
-  logger.info(`🔎 Searching theses for ${university.name}, Year: ${year}`);
-
-  if (page.url() !== config.baseUrl) {
-    await page.goto(config.baseUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 10000,
-    });
-  }
-
-  await page.evaluate(
-    (uni, yr) => {
-      const universeInput = document.querySelector(
-        'input[name="Universite"]'
-      ) as HTMLInputElement;
-      const year1Select = document.querySelector(
-        'select[name="yil1"]'
-      ) as HTMLSelectElement;
-      const year2Select = document.querySelector(
-        'select[name="yil2"]'
-      ) as HTMLSelectElement;
-      const form = document.querySelector(
-        'form[name="GForm"]'
-      ) as HTMLFormElement;
-
-      if (universeInput) universeInput.value = uni;
-      if (year1Select) year1Select.value = yr;
-      if (year2Select) year2Select.value = yr;
-      form?.submit();
-    },
-    university.id,
-    year
-  );
-
-  try {
-    await page.waitForNavigation({
-      waitUntil: "domcontentloaded",
-      timeout: 5000,
-    });
-  } catch (error) {
-    logger.error(
-      `Navigation failed for ${university.name}, Year: ${year}`,
-      error
-    );
-    throw error;
-  }
-
-  const isMaintenancePage = await page.evaluate(() => {
-    const bodyText = document.body.textContent || "";
-    return (
-      bodyText.includes("BAKIM CALISMASI") ||
-      bodyText.includes("undergoing maintenance")
-    );
-  });
-
-  if (isMaintenancePage) {
-    logger.warn(
-      `⚠️ Maintenance page detected for ${university.name}, Year: ${year}. Retrying later...`
-    );
-    throw new Error("Maintenance page detected");
-  }
-
-  const cleanedText = await page.evaluate(() => {
-    const textContent = document.body.textContent || "";
-    return textContent.replace(/\s+/g, " ").replace(/\n/g, " ").trim();
-  });
-
-  const match = cleanedText.match(/(\d+) kayıt/);
-  const recordCount = match ? parseInt(match[1], 10) : 0;
-  logger.info(`Found ${recordCount} records.`);
-
-  const html = await page.content();
-
-  if (!html.includes("getData()")) {
-    logger.error(
-      `❌ No getData() found for ${university.name}, Year: ${year}. Throwing error.`
-    );
-    throw new Error(`No getData() found for ${university.name}, Year: ${year}`);
-  }
-
-  return { html, recordCount };
-}
-
-async function safeSearchByUniversityAndYear({
-  page,
-  university,
-  year,
-  retries = 3, // Increased retries
-}: {
-  page: Page;
-  university: University;
-  year: string;
-  retries?: number;
-}) {
-  return pRetry(() => searchByUniversityAndYear({ page, university, year }), {
-    retries,
-    onFailedAttempt: (error) => {
-      logger.warn(
-        `Attempt ${error.attemptNumber} failed | ${university.name} | ${year} | ${error.retriesLeft} retries left.`
-      );
-      // Add delay between retries for maintenance pages
-      if (error.message.includes("maintenance")) {
-        return new Promise((resolve) => setTimeout(resolve, 30000));
-      }
     },
   });
 }
