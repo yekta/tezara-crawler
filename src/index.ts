@@ -30,6 +30,13 @@ async function mainLoop() {
   let browser: puppeteer.Browser | undefined = undefined;
 
   try {
+    // if there is no progress file, create one
+    try {
+      await fs.access(getPath(config.progressFile));
+    } catch (error) {
+      await fs.writeFile(getPath(config.progressFile), "");
+    }
+
     browser = await puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
