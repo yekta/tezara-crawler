@@ -166,6 +166,7 @@ export const crawlCombination = async (
         institute,
         year,
         progressFile: config.progressFile,
+        log: false,
       });
     }
   } else {
@@ -177,6 +178,7 @@ export const crawlCombination = async (
         institute,
         year,
         progressFile: config.progressFile,
+        log: false,
       });
     }
   }
