@@ -209,7 +209,7 @@ const processAllFiles = () => {
   );
 
   if (parseErrors.length > 0) {
-    const errorsPath = path.join(outputDir, "../../json-parse-errors.txt");
+    const errorsPath = path.join(outputDir, "../../parse-json-errors.txt");
     fs.writeFileSync(errorsPath, parseErrors.join("\n"), "utf8");
     console.log(
       `\nEncountered errors in ${parseErrors.length} file(s). Names saved to ${errorsPath}`

@@ -7,11 +7,11 @@ jsons
 jsons-extended*
 jsons-cleaned*
 jsons-final*
-json-parse-errors.txt
 extend-json-progress.txt
 progress-postgres.txt
 progress-meili.txt
 parse-json-stats.json
+parse-json-errors.txt
 
 
 # Node modules
