@@ -11,6 +11,7 @@ json-parse-errors.txt
 extend-json-progress.txt
 progress-postgres.txt
 progress-meili.txt
+parse-json-stats.json
 
 
 # Node modules

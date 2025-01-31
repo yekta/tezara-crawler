@@ -9,9 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const parseErrors: string[] = [];
-const thesisIds: Set<number> = new Set();
-let minThesisId: number | null = null;
-let maxThesisId: number | null = null;
+
+// Add tracking for IDs
+let minId: number | null = null;
+let maxId: number | null = null;
+const allIds = new Set<number>();
 
 // Convert AST ObjectExpression to JSON
 const astNodeToJson = (node: any): object | null => {
@@ -41,7 +43,7 @@ const astNodeToJson = (node: any): object | null => {
   return result;
 };
 
-// Extract `var doc` and detect `getData` function
+// Extract var doc and detect getData function
 const extractDataFromScript = (scriptContent: string) => {
   let hasGetData = false;
   const varDocs: object[] = [];
@@ -53,13 +55,11 @@ const extractDataFromScript = (scriptContent: string) => {
     });
 
     walk(ast, {
-      // Detect `getData` function
       FunctionDeclaration(node: any) {
         if (node.id?.name === "getData") {
           hasGetData = true;
         }
       },
-      // Detect `var doc = { ... }`
       VariableDeclaration(node: any) {
         node.declarations.forEach((decl: any) => {
           if (
@@ -76,7 +76,6 @@ const extractDataFromScript = (scriptContent: string) => {
     });
   } catch (error) {
     console.error("Error parsing script content:", error);
-    // Do not throw, since we handle it further up
   }
 
   return { hasGetData, varDocs };
@@ -84,15 +83,41 @@ const extractDataFromScript = (scriptContent: string) => {
 
 let totalExtractedCount = 0;
 
+// Function to track ID statistics
+const trackId = (id: string) => {
+  if (!id) return;
+
+  const numId = parseInt(id);
+  if (isNaN(numId)) return;
+
+  allIds.add(numId);
+
+  if (minId === null || numId < minId) {
+    minId = numId;
+  }
+  if (maxId === null || numId > maxId) {
+    maxId = numId;
+  }
+};
+
+// Function to get missing IDs
+const getMissingIds = (): number[] => {
+  if (minId === null || maxId === null) return [];
+
+  const missing: number[] = [];
+  for (let i = minId; i <= maxId; i++) {
+    if (!allIds.has(i)) {
+      missing.push(i);
+    }
+  }
+  return missing;
+};
+
 // Process a single HTML file
 const processFile = (filePath: string, outputDir: string) => {
   try {
     const htmlContent = fs.readFileSync(filePath, "utf8");
-
-    // 1. Use Cheerio to parse the HTML
     let $ = cheerio.load(htmlContent);
-
-    // 2. Extract all <script> tags
     const scriptElements = $("script");
     console.log(`Found ${scriptElements.length} script tags in ${filePath}`);
 
@@ -112,39 +137,22 @@ const processFile = (filePath: string, outputDir: string) => {
       }
     });
 
-    // Ensure `getData` exists, or record parse error
     if (!hasGetData) {
       console.error(`Error: Missing "getData" function in ${filePath}`);
       parseErrors.push(filePath);
+      $ = null as any;
       return;
     }
 
-    // If no "var doc" found, skip writing JSON
     if (extractedDocs.length === 0) {
       console.log(`No "var doc" found in ${filePath}, skipping.`);
+      $ = null as any;
       return;
     }
 
-    // Transform extracted documents
     const transformedDocs = extractedDocs.map((doc) => transformDoc(doc));
     totalExtractedCount += extractedDocs.length;
 
-    // Track min/max thesis_id
-    transformedDocs.forEach((doc) => {
-      if (!doc.thesis_id) throw new Error("🔴 thesis_id is missing");
-      const thesisId = parseInt(doc.thesis_id, 10);
-      if (!isNaN(thesisId)) {
-        thesisIds.add(thesisId);
-        if (minThesisId === null || thesisId < minThesisId) {
-          minThesisId = thesisId;
-        }
-        if (maxThesisId === null || thesisId > maxThesisId) {
-          maxThesisId = thesisId;
-        }
-      }
-    });
-
-    // Write results to JSON file
     const outputFileName = path.basename(filePath, ".html") + ".json";
     const outputPath = path.join(outputDir, outputFileName);
 
@@ -152,6 +160,8 @@ const processFile = (filePath: string, outputDir: string) => {
     console.log(
       `Processed ${filePath} -> ${outputPath}. Entries extracted: ${transformedDocs.length}`
     );
+
+    $ = null as any;
   } catch (error) {
     console.error(`Error processing ${filePath}:`, error);
     parseErrors.push(filePath);
@@ -176,60 +186,109 @@ const processAllFiles = () => {
     processFile(filePath, outputDir);
   });
 
-  console.log(`\nTotal extracted entries: ${totalExtractedCount}`);
+  // Write ID statistics
+  const idStatsPath = path.join(outputDir, "../../parse-json-stats.json");
+  const missingIds = getMissingIds();
+  const idStats = {
+    minId,
+    maxId,
+    totalUniqueIds: allIds.size,
+    missingIds,
+    missingIdsCount: missingIds.length,
+  };
 
-  // Identify missing thesis IDs
-  if (minThesisId !== null && maxThesisId !== null) {
-    const missingThesisIds = [];
-    for (let i = minThesisId; i <= maxThesisId; i++) {
-      if (!thesisIds.has(i)) {
-        missingThesisIds.push(i);
-      }
-    }
+  fs.writeFileSync(idStatsPath, JSON.stringify(idStats, null, 2));
+  console.log(`\nID Statistics saved to ${idStatsPath}`);
+  console.log(`Min ID: ${minId}`);
+  console.log(`Max ID: ${maxId}`);
+  console.log(`Total unique IDs: ${allIds.size}`);
+  console.log(`Missing IDs count: ${missingIds.length}`);
 
-    console.log(`\nMin Thesis ID: ${minThesisId}`);
-    console.log(`Max Thesis ID: ${maxThesisId}`);
-    console.log(
-      `Missing Thesis IDs: ${
-        missingThesisIds.length > 0 ? missingThesisIds.join(", ") : "None"
-      }`
-    );
-  }
+  console.log(
+    `\nTotal extracted entries across all files: ${totalExtractedCount}`
+  );
 
-  // Write parse-errors.txt if there are any
   if (parseErrors.length > 0) {
-    const errorsPath = path.join(outputDir, "../json-parse-errors.txt");
+    const errorsPath = path.join(outputDir, "../../json-parse-errors.txt");
     fs.writeFileSync(errorsPath, parseErrors.join("\n"), "utf8");
     console.log(
-      `\nEncountered errors in ${parseErrors.length} files. Errors saved to ${errorsPath}`
+      `\nEncountered errors in ${parseErrors.length} file(s). Names saved to ${errorsPath}`
     );
   }
 };
 
-// Execute the script
-processAllFiles();
-
-// Helper Functions
 function parseUserId(userIdHtml: string) {
   const match = userIdHtml.match(
     /onclick=tezDetay\('([^']+)','([^']+)'\)>(.*?)<\/span>/
   );
-  if (!match) return { thesis_id: null, id1: null, id2: null };
+  if (!match) {
+    return { thesis_id: null, id1: null, id2: null };
+  }
   const [, id_1, id_2, thesisId] = match;
-  return { thesis_id: thesisId, id_1, id_2 };
+
+  // Track both IDs
+  trackId(id_1);
+  trackId(id_2);
+
+  return {
+    thesis_id: thesisId,
+    id_1,
+    id_2,
+  };
 }
 
 function parseTitles(weightHtml: string) {
   const $ = cheerio.load(weightHtml || "");
   const translatedSpan = $("span[style*='font-style: italic']");
   const title_translated = translatedSpan.text().trim();
+
   translatedSpan.remove();
   $("br").replaceWith(" ");
   const title_original = $.root().text().trim();
+
   return { title_original, title_translated };
+}
+
+function parseSubjects(someDate: string) {
+  const subjectPairs = (someDate || "").split(";").map((x) => x.trim());
+  const subjects_turkish: string[] = [];
+  const subjects_english: string[] = [];
+
+  subjectPairs.forEach((pair) => {
+    const [turk, eng] = pair.split("=").map((x) => x.trim());
+    if (turk) subjects_turkish.push(turk);
+    if (eng) subjects_english.push(eng);
+  });
+
+  return { subjects_turkish, subjects_english };
 }
 
 function transformDoc(originalDoc: any) {
   const { thesis_id, id_1, id_2 } = parseUserId(originalDoc.userId || "");
-  return { thesis_id, id_1, id_2, name: originalDoc.name };
+
+  const { title_original, title_translated } = parseTitles(
+    originalDoc.weight || ""
+  );
+
+  const { subjects_turkish, subjects_english } = parseSubjects(
+    originalDoc.someDate || ""
+  );
+
+  return {
+    thesis_id,
+    id_1,
+    id_2,
+    name: originalDoc.name,
+    year: originalDoc.age,
+    title_original,
+    title_translated,
+    university: originalDoc.uni,
+    language: originalDoc.height,
+    thesis_type: originalDoc.important,
+    subjects_turkish,
+    subjects_english,
+  };
 }
+
+// Execute the script
+processAllFiles();
