@@ -9,7 +9,7 @@ import {
 } from "./crawler";
 import { logger } from "./logger";
 import type { University } from "./types";
-import { getPath, isAlreadyCrawled } from "./utils";
+import { getPath, isAlreadyCrawled, getUniversityYearKey } from "./utils";
 
 const main = async () => {
   await fs.mkdir(getPath(config.downloadDir), { recursive: true });
@@ -19,7 +19,6 @@ const main = async () => {
   mainLoop();
 };
 
-// index.ts
 async function mainLoop() {
   logger.info("🚀 Starting main loop...");
   let browser: puppeteer.Browser | undefined = undefined;
@@ -57,8 +56,22 @@ async function mainLoop() {
 
     // Process all combinations
     for (const combo of combinations) {
-      // Check if any institute combination for this university and year is not crawled
-      let allCrawled = true;
+      // First check if university+year is already done (faster check)
+      const progress = await fs.readFile(getPath(config.progressFile), "utf-8");
+      const uniYearKey = getUniversityYearKey({
+        university: combo.university,
+        year: combo.year,
+      });
+
+      if (progress.includes(uniYearKey)) {
+        logger.info(
+          `\n⏭️ Already crawled at university level | ${combo.university.name} | ${combo.year}`
+        );
+        continue;
+      }
+
+      // If not done at university level, collect uncrawled institutes
+      const uncrawledInstitutes = [];
       for (const institute of institutes) {
         const isCrawled = await isAlreadyCrawled({
           university: combo.university,
@@ -67,23 +80,26 @@ async function mainLoop() {
           progressFile: config.progressFile,
         });
         if (!isCrawled) {
-          allCrawled = false;
-          break;
+          uncrawledInstitutes.push(institute);
         }
       }
 
-      if (allCrawled) {
+      if (uncrawledInstitutes.length === 0) {
         logger.info(
           `\n⏭️ Already crawled all institutes | ${combo.university.name} | ${combo.year}`
         );
         continue;
       }
 
-      logger.info(`\n🔄 Processing: ${combo.university.name} | ${combo.year}`);
+      logger.info(
+        `\n🔄 Processing: ${combo.university.name} | ${combo.year} | ${uncrawledInstitutes.length} institutes remaining`
+      );
+
+      // Only pass uncrawled institutes to crawlCombination
       await crawlCombination(
         page,
         combo.university,
-        institutes,
+        uncrawledInstitutes,
         combo.year,
         config
       );
