@@ -250,7 +250,7 @@ async function searchThesesFull({
     },
     university.id,
     year,
-    subject.id
+    subject.name
   );
 
   try {
