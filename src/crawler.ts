@@ -138,9 +138,12 @@ export const crawlCombination = async (
     const filename = `${encodedUniversityName}${separator}${university.id}${separator}${encodedInstituteName}${separator}${institute.id}${separator}${year}.html`;
     const filepath = path.join(getPath(config.downloadDir), filename);
     await fs.writeFile(filepath, html);
+    logger.info(
+      `📜🟢 Created HTML file | ${university.name} | ${institute.name} | ${year}`
+    );
   } else {
     logger.info(
-      `📜 0 records found | ${university.name} | ${institute.name} | ${year}. Skipping creation of HTML file.`
+      `📜🟡 Skipping creation of HTML file | ${university.name} | ${institute.name} | ${year}`
     );
   }
 
