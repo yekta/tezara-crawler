@@ -58,17 +58,21 @@ async function mainLoop() {
     // Process all combinations
     for (const combo of combinations) {
       // Check if any institute combination for this university and year is not crawled
-      const needsCrawling = await institutes.some(async (institute) => {
+      let allCrawled = true;
+      for (const institute of institutes) {
         const isCrawled = await isAlreadyCrawled({
           university: combo.university,
           institute,
           year: combo.year,
           progressFile: config.progressFile,
         });
-        return !isCrawled;
-      });
+        if (!isCrawled) {
+          allCrawled = false;
+          break;
+        }
+      }
 
-      if (!needsCrawling) {
+      if (allCrawled) {
         logger.info(
           `\n⏭️ Already crawled all institutes | ${combo.university.name} | ${combo.year}`
         );
