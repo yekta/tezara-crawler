@@ -88,6 +88,7 @@ export const getInstitutes = async (page: Page): Promise<Institute[]> => {
 
   logger.info(`Found ${institutes.length} institutes`);
   await popup.close();
+
   return institutes;
 };
 
@@ -143,6 +144,8 @@ export const selectUniversity = async (
     {},
     university.name
   );
+
+  logger.info(`Selected university: ${university.name}`);
 };
 
 export const selectInstitute = async (
@@ -197,6 +200,8 @@ export const selectInstitute = async (
     {},
     institute.name
   );
+
+  logger.info(`Selected institute: ${institute.name}`);
 };
 
 export const getYears = async (page: Page): Promise<string[]> => {
@@ -346,7 +351,7 @@ export const safeSearchTheses = async (
     retries,
     onFailedAttempt: (error) => {
       logger.warn(
-        `Attempt ${error.attemptNumber} failed for ${university.name} - ${institute.name}, Year: ${year}. ${error.retriesLeft} retries left.`
+        `Attempt ${error.attemptNumber} failed | ${university.name} | ${institute.name} | ${year} | ${error.retriesLeft} retries left.`
       );
     },
   });

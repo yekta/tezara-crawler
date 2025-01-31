@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { Institute, University } from "./types.js";
 import { fileURLToPath } from "node:url";
+import { logger } from "./logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,6 +56,6 @@ export const markAsCrawled = async ({
   progressFile: string;
 }): Promise<void> => {
   const key = getKey({ university, institute, year });
-  console.log("🖊️ Marking as crawled:", key);
+  logger.info("🖊️ Marking as crawled | ", key);
   await fs.appendFile(getPath(progressFile), key + "\n");
 };
