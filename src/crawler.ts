@@ -158,6 +158,12 @@ export async function crawlCombination({
       logger.info(
         `📜🟢 Created HTML file | ${university.name} | ${subject.name} | ${year}`
       );
+      markSubjectAsCrawled({
+        university,
+        subject,
+        year,
+        progressFile: config.progressFile,
+      });
     } else {
       logger.warn(
         `⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${subject.name} | ${year}`
