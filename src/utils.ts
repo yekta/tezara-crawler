@@ -56,6 +56,6 @@ export const markAsCrawled = async ({
   progressFile: string;
 }): Promise<void> => {
   const key = getKey({ university, institute, year });
-  logger.info("🖊️ Marking as crawled | ", key);
+  logger.info(`🖊️ Marking as crawled | ${key}`);
   await fs.appendFile(getPath(progressFile), key + "\n");
 };
