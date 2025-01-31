@@ -268,16 +268,14 @@ export async function crawlCombination({
             logger.info(
               `📜🟢 Created HTML file | ${university.name} | ${institute.name} | ${thesisType.name} | ${year}`
             );
-
-            // Only mark as crawled after successful file write
-            await markInstituteAsCrawled({
-              university,
-              institute,
-              thesisType,
-              year,
-              progressFile: config.progressFile,
-            });
           }
+          await markInstituteAsCrawled({
+            university,
+            institute,
+            thesisType,
+            year,
+            progressFile: config.progressFile,
+          });
         } catch (error) {
           logger.error(
             `Failed to process institute: ${university.name} | ${institute.name} | ${thesisType.name} | ${year}`,
