@@ -146,7 +146,6 @@ export async function crawlCombination({
         year,
         progressFile: config.progressFile,
       });
-      continue;
     } else if (recordCount <= MAX_RECORD_COUNT) {
       const filepath = generateFilePath({
         dir: config.downloadDir,
