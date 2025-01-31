@@ -7,6 +7,7 @@ import { logger } from "./logger";
 import type { CrawlerConfig, Institute, ThesisType, University } from "./types";
 import {
   getPath,
+  isAlreadyCrawled,
   markInstituteAsCrawled,
   markThesisTypeAsCrawled,
   markUniversityAsCrawled,
@@ -136,6 +137,7 @@ export async function crawlCombination({
   year,
   thesisTypes,
   config,
+  progressFileContent,
 }: {
   page: Page;
   university: University;
@@ -143,6 +145,7 @@ export async function crawlCombination({
   year: string;
   thesisTypes: ThesisType[];
   config: CrawlerConfig;
+  progressFileContent: string;
 }): Promise<void> {
   logger.info(`🎓 Checking ${university.name} for year ${year}`);
 
@@ -188,6 +191,21 @@ export async function crawlCombination({
 
   // Try each thesis type separately
   for (const thesisType of thesisTypes) {
+    // Check if thesis type is already crawled
+    const isThesisTypeDone = isAlreadyCrawled({
+      university,
+      year,
+      thesisType,
+      progressFileContent,
+    });
+
+    if (isThesisTypeDone) {
+      logger.info(
+        `⏭️ Already crawled at thesis type level | ${university.name} | ${thesisType.name} | ${year}`
+      );
+      continue;
+    }
+
     const { html: thesisTypeHtml, recordCount: thesisTypeRecordCount } =
       await safeSearchByUniversityAndYear({
         page,
@@ -213,6 +231,21 @@ export async function crawlCombination({
 
       // If still over limit, check each institute separately with thesis type
       for (const institute of institutes) {
+        // Check if institute is already crawled
+        const isInstituteDone = isAlreadyCrawled({
+          university,
+          institute,
+          year,
+          thesisType,
+          progressFileContent,
+        });
+        if (isInstituteDone) {
+          logger.info(
+            `⏭️ Already crawled at institute level | ${university.name} | ${institute.name} | ${thesisType.name} | ${year}`
+          );
+          continue;
+        }
+
         try {
           const { html: instituteHtml, recordCount: instituteRecordCount } =
             await safeSearchTheses({

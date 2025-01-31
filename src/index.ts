@@ -10,12 +10,7 @@ import {
 } from "./crawler";
 import { logger } from "./logger";
 import type { University } from "./types";
-import {
-  getPath,
-  isAlreadyCrawled,
-  getUniversityYearKey,
-  getThesisTypeKey,
-} from "./utils";
+import { getPath, isAlreadyCrawled } from "./utils";
 
 const main = async () => {
   await fs.mkdir(getPath(config.downloadDir), { recursive: true });
@@ -76,7 +71,7 @@ async function mainLoop() {
     // Process all combinations
     for (const combo of combinations) {
       // Check if university+year is already done
-      const isUniYearDone = await isAlreadyCrawled({
+      const isUniYearDone = isAlreadyCrawled({
         university: combo.university,
         year: combo.year,
         progressFileContent,
@@ -92,7 +87,7 @@ async function mainLoop() {
       // Get uncrawled thesis types
       const uncrawledThesisTypes = [];
       for (const thesisType of thesisTypes) {
-        const isThesisTypeDone = await isAlreadyCrawled({
+        const isThesisTypeDone = isAlreadyCrawled({
           university: combo.university,
           year: combo.year,
           thesisType,
@@ -116,7 +111,7 @@ async function mainLoop() {
       for (const thesisType of uncrawledThesisTypes) {
         const uncrawledInstitutes = [];
         for (const institute of institutes) {
-          const isCrawled = await isAlreadyCrawled({
+          const isCrawled = isAlreadyCrawled({
             university: combo.university,
             institute,
             thesisType,
@@ -154,6 +149,7 @@ async function mainLoop() {
         config,
         thesisTypes: uncrawledThesisTypes,
         institutes: workItems.flatMap((item) => item.institutes),
+        progressFileContent,
       });
     }
 

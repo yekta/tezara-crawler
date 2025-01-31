@@ -54,7 +54,7 @@ export const getInstituteKey = ({
   }|${institute.name.replaceAll(" ", "")}]`;
 };
 
-export async function isAlreadyCrawled({
+export function isAlreadyCrawled({
   university,
   institute,
   thesisType,
@@ -66,41 +66,37 @@ export async function isAlreadyCrawled({
   thesisType?: ThesisType;
   year: string;
   progressFileContent: string;
-}): Promise<boolean> {
-  try {
-    // Check if we have a university-level entry
-    const uniKey = getUniversityYearKey({ university, year });
-    if (progressFileContent.includes(uniKey)) {
+}): boolean {
+  // Check if we have a university-level entry
+  const uniKey = getUniversityYearKey({ university, year });
+  if (progressFileContent.includes(uniKey)) {
+    return true;
+  }
+
+  // If thesis type is provided, check university+thesis_type entry
+  if (thesisType) {
+    const uniThesisTypeKey = getThesisTypeKey({
+      university,
+      thesisType,
+      year,
+    });
+    if (progressFileContent.includes(uniThesisTypeKey)) {
       return true;
     }
-
-    // If thesis type is provided, check university+thesis_type entry
-    if (thesisType) {
-      const uniThesisTypeKey = getThesisTypeKey({
-        university,
-        thesisType,
-        year,
-      });
-      if (progressFileContent.includes(uniThesisTypeKey)) {
-        return true;
-      }
-    }
-
-    // If both institute and thesis type are provided, check for specific institute entry
-    if (institute && thesisType) {
-      const instKey = getInstituteKey({
-        university,
-        institute,
-        thesisType,
-        year,
-      });
-      return progressFileContent.includes(instKey);
-    }
-
-    return false;
-  } catch {
-    return false;
   }
+
+  // If both institute and thesis type are provided, check for specific institute entry
+  if (institute && thesisType) {
+    const instKey = getInstituteKey({
+      university,
+      institute,
+      thesisType,
+      year,
+    });
+    return progressFileContent.includes(instKey);
+  }
+
+  return false;
 }
 
 export async function markUniversityAsCrawled({
