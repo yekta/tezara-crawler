@@ -116,15 +116,30 @@ export const crawlCombination = async (
   logger.info(
     `🎓 Crawling ${university.name} - ${institute.name} for year ${year}`
   );
-  const html = await safeSearchTheses(page, university, institute, year);
-  if (!html) return;
+  const { html, recordCount } = await safeSearchTheses(
+    page,
+    university,
+    institute,
+    year
+  );
+  if (!html) {
+    logger.error(
+      `❌ No HTML content found for ${university.name} - ${institute.name}, Year: ${year}`
+    );
+    throw new Error(
+      `No HTML content found for ${university.name} - ${institute.name}, Year: ${year}`
+    );
+  }
 
-  const encodedUniversityName = encodeURIComponent(university.name);
-  const encodedInstituteName = encodeURIComponent(institute.name);
-  const separator = "___";
-  const filename = `${encodedUniversityName}${separator}${university.id}${separator}${encodedInstituteName}${separator}${institute.id}${separator}${year}.html`;
-  const filepath = path.join(getPath(config.downloadDir), filename);
-  await fs.writeFile(filepath, html);
+  if (recordCount > 0) {
+    const encodedUniversityName = encodeURIComponent(university.name);
+    const encodedInstituteName = encodeURIComponent(institute.name);
+    const separator = "___";
+    const filename = `${encodedUniversityName}${separator}${university.id}${separator}${encodedInstituteName}${separator}${institute.id}${separator}${year}.html`;
+    const filepath = path.join(getPath(config.downloadDir), filename);
+    await fs.writeFile(filepath, html);
+  }
+
   await markAsCrawled({
     university,
     institute,
@@ -138,7 +153,7 @@ const searchTheses = async (
   university: University,
   institute: Institute,
   year: string
-): Promise<string> => {
+): Promise<{ html: string; recordCount: number }> => {
   logger.info(
     `🔎 Searching theses for ${university.name} - ${institute.name}, Year: ${year}`
   );
@@ -232,7 +247,7 @@ const searchTheses = async (
     );
   }
 
-  return html;
+  return { html, recordCount };
 };
 
 const safeSearchTheses = async (
@@ -241,7 +256,7 @@ const safeSearchTheses = async (
   institute: Institute,
   year: string,
   retries = 1
-): Promise<string> => {
+) => {
   return pRetry(() => searchTheses(page, university, institute, year), {
     retries,
     onFailedAttempt: (error) => {
