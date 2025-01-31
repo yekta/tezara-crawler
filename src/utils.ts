@@ -19,9 +19,10 @@ export const getUniversityYearKey = ({
 }: {
   university: University;
   year: string;
-}): string => `${university.id}|${university.name.replaceAll(" ", "")}|${year}`;
+}): string =>
+  `[${university.id}|${university.name.replaceAll(" ", "")}|${year}]`;
 
-export const getUniversityYearThesisTypeKey = ({
+export const getThesisTypeKey = ({
   university,
   year,
   thesisType,
@@ -30,10 +31,9 @@ export const getUniversityYearThesisTypeKey = ({
   year: string;
   thesisType: ThesisType;
 }): string => {
-  return (
-    getUniversityYearKey({ university, year }) +
-    `|${thesisType.id}|${thesisType.name.replaceAll(" ", "")}`
-  );
+  return `[${university.id}|${university.name.replaceAll(" ", "")}|${year}|${
+    thesisType.id
+  }|${thesisType.name.replaceAll(" ", "")}]`;
 };
 
 export const getInstituteKey = ({
@@ -46,40 +46,42 @@ export const getInstituteKey = ({
   institute: Institute;
   thesisType: ThesisType;
   year: string;
-}): string =>
-  getUniversityYearThesisTypeKey({ university, year, thesisType }) +
-  `|${institute.id}|${institute.name.replaceAll(" ", "")}`;
+}): string => {
+  return `[${university.id}|${university.name.replaceAll(" ", "")}|${year}|${
+    thesisType.id
+  }|${thesisType.name.replaceAll(" ", "")}|${
+    institute.id
+  }|${institute.name.replaceAll(" ", "")}]`;
+};
 
 export async function isAlreadyCrawled({
   university,
   institute,
   thesisType,
   year,
-  progressFile,
+  progressFileContent,
 }: {
   university: University;
   institute?: Institute;
   thesisType?: ThesisType;
   year: string;
-  progressFile: string;
+  progressFileContent: string;
 }): Promise<boolean> {
   try {
-    const progress = await fs.readFile(getPath(progressFile), "utf-8");
-
     // Check if we have a university-level entry
     const uniKey = getUniversityYearKey({ university, year });
-    if (progress.includes(uniKey)) {
+    if (progressFileContent.includes(uniKey)) {
       return true;
     }
 
     // If thesis type is provided, check university+thesis_type entry
     if (thesisType) {
-      const uniThesisTypeKey = getUniversityYearThesisTypeKey({
+      const uniThesisTypeKey = getThesisTypeKey({
         university,
         thesisType,
         year,
       });
-      if (progress.includes(uniThesisTypeKey)) {
+      if (progressFileContent.includes(uniThesisTypeKey)) {
         return true;
       }
     }
@@ -92,7 +94,7 @@ export async function isAlreadyCrawled({
         thesisType,
         year,
       });
-      return progress.includes(instKey);
+      return progressFileContent.includes(instKey);
     }
 
     return false;
@@ -146,7 +148,7 @@ export async function markThesisTypeAsCrawled({
   thesisType: ThesisType;
   progressFile: string;
 }): Promise<void> {
-  const key = getUniversityYearThesisTypeKey({ university, year, thesisType });
+  const key = getThesisTypeKey({ university, year, thesisType });
   logger.info(`🖊️ Marking university+thesis_type as crawled | ${key}`);
   await fs.appendFile(getPath(progressFile), key + "\n");
 }

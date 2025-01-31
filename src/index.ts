@@ -14,7 +14,7 @@ import {
   getPath,
   isAlreadyCrawled,
   getUniversityYearKey,
-  getUniversityYearThesisTypeKey,
+  getThesisTypeKey,
 } from "./utils";
 
 const main = async () => {
@@ -68,17 +68,21 @@ async function mainLoop() {
 
     logger.info(`Generated ${combinations.length} combinations to process`);
 
+    const progressFileContent = await fs.readFile(
+      getPath(config.progressFile),
+      "utf-8"
+    );
+
     // Process all combinations
     for (const combo of combinations) {
-      const progress = await fs.readFile(getPath(config.progressFile), "utf-8");
-
-      // First check if university+year is already done (fastest check)
-      const uniYearKey = getUniversityYearKey({
+      // Check if university+year is already done
+      const isUniYearDone = await isAlreadyCrawled({
         university: combo.university,
         year: combo.year,
+        progressFileContent,
       });
 
-      if (progress.includes(uniYearKey)) {
+      if (isUniYearDone) {
         logger.info(
           `\n⏭️ Already crawled at university level | ${combo.university.name} | ${combo.year}`
         );
@@ -86,14 +90,19 @@ async function mainLoop() {
       }
 
       // Get uncrawled thesis types
-      const uncrawledThesisTypes = thesisTypes.filter((thesisType) => {
-        const thesisTypeKey = getUniversityYearThesisTypeKey({
+      const uncrawledThesisTypes = [];
+      for (const thesisType of thesisTypes) {
+        const isThesisTypeDone = await isAlreadyCrawled({
           university: combo.university,
           year: combo.year,
           thesisType,
+          progressFileContent,
         });
-        return !progress.includes(thesisTypeKey);
-      });
+
+        if (!isThesisTypeDone) {
+          uncrawledThesisTypes.push(thesisType);
+        }
+      }
 
       if (uncrawledThesisTypes.length === 0) {
         logger.info(
@@ -112,7 +121,7 @@ async function mainLoop() {
             institute,
             thesisType,
             year: combo.year,
-            progressFile: config.progressFile,
+            progressFileContent,
           });
           if (!isCrawled) {
             uncrawledInstitutes.push(institute);
