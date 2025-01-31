@@ -122,8 +122,10 @@ export const selectUniversity = async (
     throw new Error("Failed to open university selection popup");
   }
 
+  logger.info("Popup opened, waiting for content...");
   await popup.waitForSelector("table#sf", { timeout: 10000 });
 
+  logger.info("Popup content loaded, selecting university...");
   await popup.evaluate((uni) => {
     const selector = `a[onclick*="eklecikar('${uni.name}','${uni.id}')"]`;
     const link = document.querySelector(selector);
@@ -178,8 +180,10 @@ export const selectInstitute = async (
     throw new Error("Failed to open institute selection popup");
   }
 
+  logger.info("Popup opened, waiting for content...");
   await popup.waitForSelector("table#sf", { timeout: 10000 });
 
+  logger.info("Popup content loaded, selecting institute...");
   await popup.evaluate((inst) => {
     const selector = `a[onclick*="eklecikar('${inst.name}','${inst.id}')"]`;
     const link = document.querySelector(selector);
