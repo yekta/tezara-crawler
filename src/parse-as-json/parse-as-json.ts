@@ -150,8 +150,8 @@ const processFile = (filePath: string, outputDir: string) => {
 // Process all files
 const processAllFiles = () => {
   // We assume this script is under src/, so ../downloads will be the correct path
-  const inputDir = path.resolve(__dirname, "../downloads");
-  const outputDir = path.resolve(__dirname, "../jsons");
+  const inputDir = path.resolve(__dirname, "../../downloads");
+  const outputDir = path.resolve(__dirname, "../../jsons");
 
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
