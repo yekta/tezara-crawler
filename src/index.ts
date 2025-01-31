@@ -33,11 +33,9 @@ async function mainLoop() {
     await page.goto(config.baseUrl);
 
     // Get initial data
-    const [universities, institutes, years] = await Promise.all([
-      getUniversities(page),
-      getInstitutes(page),
-      getYears(page),
-    ]);
+    const universities = await getUniversities(page);
+    const institutes = await getInstitutes(page);
+    const years = await getYears(page);
 
     logger.info(
       `Found ${universities.length} universities, ${institutes.length} institutes, and ${years.length} years`
