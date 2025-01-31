@@ -280,19 +280,19 @@ function generateFilePath({
   thesisType?: ThesisType;
   year: string;
 }) {
-  const parts = [encodeURIComponent(university.name), university.id];
+  const parts = [encodeURIComponent(university.name.replaceAll(" ", ""))];
 
   if (institute) {
-    parts.push(encodeURIComponent(institute.name), institute.id);
+    parts.push(encodeURIComponent(institute.name.replaceAll(" ", "")));
   }
 
   if (thesisType) {
-    parts.push(encodeURIComponent(thesisType.name), thesisType.id);
+    parts.push(encodeURIComponent(thesisType.name.replaceAll(" ", "")));
   }
 
   parts.push(year);
 
-  return path.join(getPath(dir), parts.join("___") + ".html");
+  return path.join(getPath(dir), parts.join("_") + ".html");
 }
 
 async function searchTheses({

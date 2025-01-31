@@ -19,7 +19,7 @@ export const getUniversityYearKey = ({
 }: {
   university: University;
   year: string;
-}): string => `${university.id}|||${university.name}|||${year}`;
+}): string => `${university.id}|${university.name.replaceAll(" ", "")}|${year}`;
 
 export const getUniversityYearThesisTypeKey = ({
   university,
@@ -30,7 +30,10 @@ export const getUniversityYearThesisTypeKey = ({
   year: string;
   thesisType: ThesisType;
 }): string => {
-  return `${university.id}|||${year}|||${thesisType.id}`;
+  return (
+    getUniversityYearKey({ university, year }) +
+    `|${thesisType.id}|${thesisType.name.replaceAll(" ", "")}`
+  );
 };
 
 export const getInstituteKey = ({
@@ -44,7 +47,8 @@ export const getInstituteKey = ({
   thesisType: ThesisType;
   year: string;
 }): string =>
-  `${university.id}|||${university.name}|||${thesisType.id}|||${thesisType.name}|||${institute.id}|||${institute.name}|||${year}`;
+  getUniversityYearThesisTypeKey({ university, year, thesisType }) +
+  `|${institute.id}|${institute.name.replaceAll(" ", "")}`;
 
 export async function isAlreadyCrawled({
   university,
