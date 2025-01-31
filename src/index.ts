@@ -4,12 +4,18 @@ import { config } from "./config";
 import {
   crawlCombination,
   getInstitutes,
+  getThesisTypes,
   getUniversities,
   getYears,
 } from "./crawler";
 import { logger } from "./logger";
 import type { University } from "./types";
-import { getPath, isAlreadyCrawled, getUniversityYearKey } from "./utils";
+import {
+  getPath,
+  isAlreadyCrawled,
+  getUniversityYearKey,
+  getUniversityYearThesisTypeKey,
+} from "./utils";
 
 const main = async () => {
   await fs.mkdir(getPath(config.downloadDir), { recursive: true });
@@ -35,9 +41,10 @@ async function mainLoop() {
     const universities = await getUniversities(page);
     const institutes = await getInstitutes(page);
     const years = await getYears(page);
+    const thesisTypes = await getThesisTypes(page);
 
     logger.info(
-      `Found ${universities.length} universities, ${institutes.length} institutes, and ${years.length} years`
+      `Found ${universities.length} universities, ${institutes.length} institutes, ${thesisTypes.length} thesis types, and ${years.length} years`
     );
 
     // Generate university + year combinations
@@ -56,8 +63,9 @@ async function mainLoop() {
 
     // Process all combinations
     for (const combo of combinations) {
-      // First check if university+year is already done (faster check)
       const progress = await fs.readFile(getPath(config.progressFile), "utf-8");
+
+      // First check if university+year is already done (fastest check)
       const uniYearKey = getUniversityYearKey({
         university: combo.university,
         year: combo.year,
@@ -70,39 +78,67 @@ async function mainLoop() {
         continue;
       }
 
-      // If not done at university level, collect uncrawled institutes
-      const uncrawledInstitutes = [];
-      for (const institute of institutes) {
-        const isCrawled = await isAlreadyCrawled({
+      // Get uncrawled thesis types
+      const uncrawledThesisTypes = thesisTypes.filter((thesisType) => {
+        const thesisTypeKey = getUniversityYearThesisTypeKey({
           university: combo.university,
-          institute,
           year: combo.year,
-          progressFile: config.progressFile,
+          thesisType,
         });
-        if (!isCrawled) {
-          uncrawledInstitutes.push(institute);
+        return !progress.includes(thesisTypeKey);
+      });
+
+      if (uncrawledThesisTypes.length === 0) {
+        logger.info(
+          `\n⏭️ Already crawled all thesis types | ${combo.university.name} | ${combo.year}`
+        );
+        continue;
+      }
+
+      // For each uncrawled thesis type, check which institutes need crawling
+      const workItems = [];
+      for (const thesisType of uncrawledThesisTypes) {
+        const uncrawledInstitutes = [];
+        for (const institute of institutes) {
+          const isCrawled = await isAlreadyCrawled({
+            university: combo.university,
+            institute,
+            thesisType,
+            year: combo.year,
+            progressFile: config.progressFile,
+          });
+          if (!isCrawled) {
+            uncrawledInstitutes.push(institute);
+          }
+        }
+        if (uncrawledInstitutes.length > 0) {
+          workItems.push({
+            thesisType,
+            institutes: uncrawledInstitutes,
+          });
         }
       }
 
-      if (uncrawledInstitutes.length === 0) {
+      if (workItems.length === 0) {
         logger.info(
-          `\n⏭️ Already crawled all institutes | ${combo.university.name} | ${combo.year}`
+          `\n⏭️ Already crawled all institute combinations | ${combo.university.name} | ${combo.year}`
         );
         continue;
       }
 
       logger.info(
-        `\n🔄 Processing: ${combo.university.name} | ${combo.year} | ${uncrawledInstitutes.length} institutes remaining`
+        `\n🔄 Processing: ${combo.university.name} | ${combo.year} | ${workItems.length} thesis types with uncrawled institutes`
       );
 
-      // Only pass uncrawled institutes to crawlCombination
-      await crawlCombination(
+      // Pass the work items to crawlCombination
+      await crawlCombination({
         page,
-        combo.university,
-        uncrawledInstitutes,
-        combo.year,
-        config
-      );
+        university: combo.university,
+        year: combo.year,
+        config,
+        thesisTypes: uncrawledThesisTypes,
+        institutes: workItems.flatMap((item) => item.institutes),
+      });
     }
 
     logger.info("🚀🟢 Main loop completed successfully!");

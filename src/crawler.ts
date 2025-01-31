@@ -4,17 +4,18 @@ import pRetry from "p-retry";
 import type { Page } from "puppeteer";
 import { config } from "./config";
 import { logger } from "./logger";
-import type { CrawlerConfig, Institute, University } from "./types";
+import type { CrawlerConfig, Institute, ThesisType, University } from "./types";
 import {
   getPath,
   markInstituteAsCrawled,
-  markUniversityYearAsCrawled,
+  markThesisTypeAsCrawled,
+  markUniversityAsCrawled,
 } from "./utils";
 
 const MAX_RECORD_COUNT = 2000;
 const MIN_YEAR = 1940;
 
-export const getUniversities = async (page: Page): Promise<University[]> => {
+export async function getUniversities(page: Page): Promise<University[]> {
   logger.info("🎓 Fetching list of universities...");
 
   const [popup] = await Promise.all([
@@ -52,9 +53,9 @@ export const getUniversities = async (page: Page): Promise<University[]> => {
   logger.info(`Found ${universities.length} universities.`);
   await popup.close();
   return universities;
-};
+}
 
-export const getInstitutes = async (page: Page): Promise<Institute[]> => {
+export async function getInstitutes(page: Page): Promise<Institute[]> {
   logger.info("🏛️ Fetching list of institutes...");
 
   const [popup] = await Promise.all([
@@ -93,9 +94,9 @@ export const getInstitutes = async (page: Page): Promise<Institute[]> => {
   await popup.close();
 
   return institutes;
-};
+}
 
-export const getYears = async (page: Page): Promise<string[]> => {
+export async function getYears(page: Page): Promise<string[]> {
   logger.info(`📅 Getting available years...`);
   const years = await page.evaluate(() => {
     const yearSelect = document.querySelector('select[name="yil1"]');
@@ -107,85 +108,206 @@ export const getYears = async (page: Page): Promise<string[]> => {
       .sort((a, b) => Number(b) - Number(a));
   });
   return years.filter((year) => parseInt(year, 10) >= MIN_YEAR);
-};
+}
 
-export const crawlCombination = async (
-  page: Page,
-  university: University,
-  institutes: Institute[],
-  year: string,
-  config: CrawlerConfig
-): Promise<void> => {
+export async function getThesisTypes(page: Page): Promise<ThesisType[]> {
+  logger.info("📚 Fetching available thesis types...");
+
+  const thesisTypes = await page.evaluate(() => {
+    const select = document.querySelector('select[name="Tur"]');
+    if (!select) return [];
+
+    return Array.from(select.querySelectorAll("option"))
+      .map((option) => ({
+        id: option.value,
+        name: option.textContent?.trim() || "",
+      }))
+      .filter((type) => type.id !== "0" && type.name);
+  });
+
+  logger.info(`Found ${thesisTypes.length} thesis types`);
+  return thesisTypes;
+}
+
+export async function crawlCombination({
+  page,
+  university,
+  institutes,
+  year,
+  thesisTypes,
+  config,
+}: {
+  page: Page;
+  university: University;
+  institutes: Institute[];
+  year: string;
+  thesisTypes: ThesisType[];
+  config: CrawlerConfig;
+}): Promise<void> {
   logger.info(`🎓 Checking ${university.name} for year ${year}`);
 
   // First try university + year combination
-  const { html, recordCount } = await safeSearchByUniversityAndYear(
+  const { html, recordCount } = await safeSearchByUniversityAndYear({
     page,
     university,
-    year
-  );
+    year,
+  });
 
-  if (recordCount > MAX_RECORD_COUNT) {
-    logger.info(
-      `⚠️ Record count (${recordCount}) exceeds limit of ${MAX_RECORD_COUNT} for ${university.name}, Year: ${year}. Checking individual institutes...`
-    );
+  if (recordCount === 0) {
+    logger.info(`📜🟡 No results found | ${university.name} | ${year}`);
+    await markUniversityAsCrawled({
+      university,
+      year,
+      progressFile: config.progressFile,
+    });
+    return;
+  }
 
-    // If over limit, check each institute separately
-    for (const institute of institutes) {
-      const { html: instituteHtml, recordCount: instituteRecordCount } =
-        await safeSearchTheses(page, university, institute, year);
-
-      if (instituteRecordCount > 0) {
-        const encodedUniversityName = encodeURIComponent(university.name);
-        const encodedInstituteName = encodeURIComponent(institute.name);
-        const separator = "___";
-        const filename = `${encodedUniversityName}${separator}${university.id}${separator}${encodedInstituteName}${separator}${institute.id}${separator}${year}.html`;
-        const filepath = path.join(getPath(config.downloadDir), filename);
-        await fs.writeFile(filepath, instituteHtml);
-        logger.info(
-          `📜🟢 Created HTML file | ${university.name} | ${institute.name} | ${year}`
-        );
-      }
-
-      await markInstituteAsCrawled({
-        university,
-        institute,
-        year,
-        progressFile: config.progressFile,
-      });
-    }
-  } else if (recordCount > 0) {
-    // If under limit, save the university-level results
-    const encodedUniversityName = encodeURIComponent(university.name);
-    const separator = "___";
-    const filename = `${encodedUniversityName}${separator}${university.id}${separator}${year}.html`;
-    const filepath = path.join(getPath(config.downloadDir), filename);
+  if (recordCount <= MAX_RECORD_COUNT) {
+    // If under limit, save the university-level results and we're done
+    const filepath = generateFilePath({
+      dir: config.downloadDir,
+      university,
+      year,
+    });
     await fs.writeFile(filepath, html);
     logger.info(`📜🟢 Created HTML file | ${university.name} | ${year}`);
 
-    // Just mark the university+year as crawled, no need to mark individual institutes
-    await markUniversityYearAsCrawled({
+    await markUniversityAsCrawled({
       university,
       year,
       progressFile: config.progressFile,
     });
-  } else {
-    logger.info(`📜🟡 No results found | ${university.name} | ${year}`);
-    // Just mark the university+year as crawled since there are no results
-    await markUniversityYearAsCrawled({
-      university,
-      year,
-      progressFile: config.progressFile,
-    });
+    return;
   }
-};
 
-const searchTheses = async (
-  page: Page,
-  university: University,
-  institute: Institute,
-  year: string
-): Promise<{ html: string; recordCount: number }> => {
+  // If we're here, we need to try with thesis types
+  logger.info(
+    `⚠️ Record count (${recordCount}) exceeds limit. Trying with thesis types...`
+  );
+
+  // Try each thesis type separately
+  for (const thesisType of thesisTypes) {
+    const { html: thesisTypeHtml, recordCount: thesisTypeRecordCount } =
+      await safeSearchByUniversityAndYear({
+        page,
+        university,
+        year,
+        thesisType, // Fixed: Pass thesis type to search
+      });
+
+    if (thesisTypeRecordCount === 0) {
+      await markThesisTypeAsCrawled({
+        university,
+        year,
+        thesisType,
+        progressFile: config.progressFile,
+      });
+      continue;
+    }
+
+    if (thesisTypeRecordCount > MAX_RECORD_COUNT) {
+      logger.info(
+        `⚠️ Record count (${thesisTypeRecordCount}) exceeds limit for thesis type ${thesisType.name}. Checking individual institutes...`
+      );
+
+      // If still over limit, check each institute separately with thesis type
+      for (const institute of institutes) {
+        const { html: instituteHtml, recordCount: instituteRecordCount } =
+          await safeSearchTheses({
+            page,
+            university,
+            institute,
+            year,
+            thesisType,
+          });
+
+        if (instituteRecordCount > 0) {
+          const filepath = generateFilePath({
+            dir: config.downloadDir,
+            university,
+            institute,
+            thesisType,
+            year,
+          });
+          await fs.writeFile(filepath, instituteHtml);
+          logger.info(
+            `📜🟢 Created HTML file | ${university.name} | ${institute.name} | ${thesisType.name} | ${year}`
+          );
+        }
+
+        await markInstituteAsCrawled({
+          university,
+          institute,
+          thesisType,
+          year,
+          progressFile: config.progressFile,
+        });
+      }
+    } else {
+      // Save thesis type level results
+      const filepath = generateFilePath({
+        dir: config.downloadDir,
+        university,
+        thesisType,
+        year,
+      });
+      await fs.writeFile(filepath, thesisTypeHtml);
+      logger.info(
+        `📜🟢 Created HTML file | ${university.name} | ${thesisType.name} | ${year}`
+      );
+
+      await markThesisTypeAsCrawled({
+        university,
+        year,
+        thesisType,
+        progressFile: config.progressFile,
+      });
+    }
+  }
+}
+
+function generateFilePath({
+  dir,
+  university,
+  institute,
+  thesisType,
+  year,
+}: {
+  dir: string;
+  university: University;
+  institute?: Institute;
+  thesisType?: ThesisType;
+  year: string;
+}) {
+  const parts = [encodeURIComponent(university.name), university.id];
+
+  if (institute) {
+    parts.push(encodeURIComponent(institute.name), institute.id);
+  }
+
+  if (thesisType) {
+    parts.push(encodeURIComponent(thesisType.name), thesisType.id);
+  }
+
+  parts.push(year);
+
+  return path.join(getPath(dir), parts.join("___") + ".html");
+}
+
+async function searchTheses({
+  page,
+  university,
+  institute,
+  thesisType,
+  year,
+}: {
+  page: Page;
+  university: University;
+  institute: Institute;
+  thesisType: ThesisType;
+  year: string;
+}): Promise<{ html: string; recordCount: number }> {
   logger.info(
     `🔎 Searching theses for ${university.name} - ${institute.name}, Year: ${year}`
   );
@@ -198,7 +320,7 @@ const searchTheses = async (
   }
 
   await page.evaluate(
-    (uni, inst, yr) => {
+    (uni, inst, yr, type) => {
       const universeInput = document.querySelector(
         'input[name="Universite"]'
       ) as HTMLInputElement;
@@ -211,6 +333,9 @@ const searchTheses = async (
       const year2Select = document.querySelector(
         'select[name="yil2"]'
       ) as HTMLSelectElement;
+      const thesisTypeSelect = document.querySelector(
+        'select[name="Tur"]'
+      ) as HTMLSelectElement;
       const form = document.querySelector(
         'form[name="GForm"]'
       ) as HTMLFormElement;
@@ -219,11 +344,13 @@ const searchTheses = async (
       if (instituteInput) instituteInput.value = inst;
       if (year1Select) year1Select.value = yr;
       if (year2Select) year2Select.value = yr;
+      if (thesisTypeSelect) thesisTypeSelect.value = type;
       form?.submit();
     },
     university.id,
     institute.id,
-    year
+    year,
+    thesisType.id
   );
 
   try {
@@ -280,30 +407,47 @@ const searchTheses = async (
   }
 
   return { html, recordCount };
-};
+}
 
-const safeSearchTheses = async (
-  page: Page,
-  university: University,
-  institute: Institute,
-  year: string,
-  retries = 1
-) => {
-  return pRetry(() => searchTheses(page, university, institute, year), {
-    retries,
-    onFailedAttempt: (error) => {
-      logger.warn(
-        `Attempt ${error.attemptNumber} failed | ${university.name} | ${institute.name} | ${year} | ${error.retriesLeft} retries left.`
-      );
-    },
-  });
-};
+async function safeSearchTheses({
+  page,
+  university,
+  institute,
+  thesisType,
+  year,
+  retries = 1,
+}: {
+  page: Page;
+  university: University;
+  institute: Institute;
+  thesisType: ThesisType;
+  year: string;
+  retries?: number;
+}) {
+  return pRetry(
+    () => searchTheses({ page, university, thesisType, institute, year }),
+    {
+      retries,
+      onFailedAttempt: (error) => {
+        logger.warn(
+          `Attempt ${error.attemptNumber} failed | ${university.name} | ${institute.name} | ${year} | ${error.retriesLeft} retries left.`
+        );
+      },
+    }
+  );
+}
 
-const searchByUniversityAndYear = async (
-  page: Page,
-  university: University,
-  year: string
-): Promise<{ html: string; recordCount: number }> => {
+async function searchByUniversityAndYear({
+  page,
+  university,
+  year,
+  thesisType,
+}: {
+  page: Page;
+  university: University;
+  year: string;
+  thesisType?: ThesisType;
+}): Promise<{ html: string; recordCount: number }> {
   logger.info(`🔎 Searching theses for ${university.name}, Year: ${year}`);
 
   if (page.url() !== config.baseUrl) {
@@ -314,7 +458,7 @@ const searchByUniversityAndYear = async (
   }
 
   await page.evaluate(
-    (uni, yr) => {
+    (uni, yr, type) => {
       const universeInput = document.querySelector(
         'input[name="Universite"]'
       ) as HTMLInputElement;
@@ -324,6 +468,9 @@ const searchByUniversityAndYear = async (
       const year2Select = document.querySelector(
         'select[name="yil2"]'
       ) as HTMLSelectElement;
+      const thesisTypeSelect = document.querySelector(
+        'select[name="Tur"]'
+      ) as HTMLSelectElement;
       const form = document.querySelector(
         'form[name="GForm"]'
       ) as HTMLFormElement;
@@ -331,10 +478,12 @@ const searchByUniversityAndYear = async (
       if (universeInput) universeInput.value = uni;
       if (year1Select) year1Select.value = yr;
       if (year2Select) year2Select.value = yr;
+      if (thesisTypeSelect && type) thesisTypeSelect.value = type;
       form?.submit();
     },
     university.id,
-    year
+    year,
+    thesisType?.id
   );
 
   try {
@@ -384,20 +533,34 @@ const searchByUniversityAndYear = async (
   }
 
   return { html, recordCount };
-};
+}
 
-const safeSearchByUniversityAndYear = async (
-  page: Page,
-  university: University,
-  year: string,
-  retries = 1
-) => {
-  return pRetry(() => searchByUniversityAndYear(page, university, year), {
-    retries,
-    onFailedAttempt: (error) => {
-      logger.warn(
-        `Attempt ${error.attemptNumber} failed | ${university.name} | ${year} | ${error.retriesLeft} retries left.`
-      );
-    },
-  });
-};
+async function safeSearchByUniversityAndYear({
+  page,
+  university,
+  year,
+  thesisType,
+  retries = 3, // Increased retries
+}: {
+  page: Page;
+  university: University;
+  year: string;
+  thesisType?: ThesisType;
+  retries?: number;
+}) {
+  return pRetry(
+    () => searchByUniversityAndYear({ page, university, year, thesisType }),
+    {
+      retries,
+      onFailedAttempt: (error) => {
+        logger.warn(
+          `Attempt ${error.attemptNumber} failed | ${university.name} | ${year} | ${error.retriesLeft} retries left.`
+        );
+        // Add delay between retries for maintenance pages
+        if (error.message.includes("maintenance")) {
+          return new Promise((resolve) => setTimeout(resolve, 30000));
+        }
+      },
+    }
+  );
+}

@@ -8,6 +8,11 @@ export type Institute = {
   name: string;
 };
 
+export interface ThesisType {
+  id: string;
+  name: string;
+}
+
 export interface CrawlerConfig {
   baseUrl: string;
   downloadDir: string;

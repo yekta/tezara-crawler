@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { Institute, University } from "./types.js";
+import type { Institute, ThesisType, University } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { logger } from "./logger.js";
 
@@ -21,44 +21,83 @@ export const getUniversityYearKey = ({
   year: string;
 }): string => `${university.id}|||${university.name}|||${year}`;
 
+export const getUniversityYearThesisTypeKey = ({
+  university,
+  year,
+  thesisType,
+}: {
+  university: University;
+  year: string;
+  thesisType: ThesisType;
+}): string => {
+  return `${university.id}|||${year}|||${thesisType.id}`;
+};
+
 export const getInstituteKey = ({
   university,
   institute,
+  thesisType,
   year,
 }: {
   university: University;
   institute: Institute;
+  thesisType: ThesisType;
   year: string;
 }): string =>
-  `${university.id}|||${university.name}|||${institute.id}|||${institute.name}|||${year}`;
+  `${university.id}|||${university.name}|||${thesisType.id}|||${thesisType.name}|||${institute.id}|||${institute.name}|||${year}`;
 
-export const isAlreadyCrawled = async ({
+export async function isAlreadyCrawled({
   university,
   institute,
+  thesisType,
   year,
   progressFile,
 }: {
   university: University;
-  institute: Institute;
+  institute?: Institute;
+  thesisType?: ThesisType;
   year: string;
   progressFile: string;
-}): Promise<boolean> => {
+}): Promise<boolean> {
   try {
     const progress = await fs.readFile(getPath(progressFile), "utf-8");
+
     // Check if we have a university-level entry
     const uniKey = getUniversityYearKey({ university, year });
     if (progress.includes(uniKey)) {
       return true;
     }
-    // If not, check for specific institute entry
-    const instKey = getInstituteKey({ university, institute, year });
-    return progress.includes(instKey);
+
+    // If thesis type is provided, check university+thesis_type entry
+    if (thesisType) {
+      const uniThesisTypeKey = getUniversityYearThesisTypeKey({
+        university,
+        thesisType,
+        year,
+      });
+      if (progress.includes(uniThesisTypeKey)) {
+        return true;
+      }
+    }
+
+    // If both institute and thesis type are provided, check for specific institute entry
+    if (institute && thesisType) {
+      const instKey = getInstituteKey({
+        university,
+        institute,
+        thesisType,
+        year,
+      });
+      return progress.includes(instKey);
+    }
+
+    return false;
   } catch {
     return false;
   }
-};
+}
 
-export const markUniversityYearAsCrawled = async ({
+export async function markUniversityAsCrawled({
   university,
   year,
   progressFile,
@@ -66,24 +105,44 @@ export const markUniversityYearAsCrawled = async ({
   university: University;
   year: string;
   progressFile: string;
-}): Promise<void> => {
+}): Promise<void> {
   const key = getUniversityYearKey({ university, year });
-  logger.info(`🖊️ Marking university+year as crawled | ${key}`);
+  logger.info(`🖊️ Marking university as crawled | ${key}`);
   await fs.appendFile(getPath(progressFile), key + "\n");
-};
+}
 
-export const markInstituteAsCrawled = async ({
+export async function markInstituteAsCrawled({
   university,
   institute,
   year,
+  thesisType,
   progressFile,
 }: {
   university: University;
   institute: Institute;
+  thesisType: ThesisType;
   year: string;
   progressFile: string;
-}): Promise<void> => {
-  const key = getInstituteKey({ university, institute, year });
-  logger.info(`🖊️ Marking institute as crawled | ${key}`);
+}): Promise<void> {
+  const key = getInstituteKey({ university, thesisType, institute, year });
+  logger.info(
+    `🖊️ Marking university+thesis_type+institute as crawled | ${key}`
+  );
   await fs.appendFile(getPath(progressFile), key + "\n");
-};
+}
+
+export async function markThesisTypeAsCrawled({
+  university,
+  year,
+  thesisType,
+  progressFile,
+}: {
+  university: University;
+  year: string;
+  thesisType: ThesisType;
+  progressFile: string;
+}): Promise<void> {
+  const key = getUniversityYearThesisTypeKey({ university, year, thesisType });
+  logger.info(`🖊️ Marking university+thesis_type as crawled | ${key}`);
+  await fs.appendFile(getPath(progressFile), key + "\n");
+}
