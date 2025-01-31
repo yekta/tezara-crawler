@@ -1,7 +1,12 @@
-export interface University {
+export type University = {
   id: string;
   name: string;
-}
+};
+
+export type Institute = {
+  id: string;
+  name: string;
+};
 
 export interface CrawlerConfig {
   baseUrl: string;

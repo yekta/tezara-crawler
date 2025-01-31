@@ -1,9 +1,16 @@
+// index.ts
 import { promises as fs } from "node:fs";
 import * as puppeteer from "puppeteer";
 import { config } from "./config";
-import { getUniversities, getYears, crawlUniversity } from "./crawler";
+import {
+  getUniversities,
+  getInstitutes,
+  getYears,
+  crawlCombination,
+} from "./crawler";
 import { getPath, isAlreadyCrawled } from "./utils";
 import { logger } from "./logger";
+import type { University, Institute } from "./types";
 
 const main = async () => {
   await fs.mkdir(getPath(config.downloadDir), { recursive: true });
@@ -25,30 +32,62 @@ async function mainLoop() {
     const page = await browser.newPage();
     await page.goto(config.baseUrl);
 
-    const universities = await getUniversities(page);
-    const years = await getYears(page);
+    // Get initial data
+    const [universities, institutes, years] = await Promise.all([
+      getUniversities(page),
+      getInstitutes(page),
+      getYears(page),
+    ]);
 
-    // Loop through years first, then universities
+    logger.info(
+      `Found ${universities.length} universities, ${institutes.length} institutes, and ${years.length} years`
+    );
+
+    // Generate all possible combinations and store them
+    const combinations: Array<{
+      university: University;
+      institute: Institute;
+      year: string;
+    }> = [];
     for (const year of years) {
-      logger.info(`\n\n📅 Processing year ${year}\n`);
-
       for (const university of universities) {
-        const isCrawled = await isAlreadyCrawled(
-          university,
-          year,
-          config.progressFile
-        );
-        if (isCrawled) {
-          logger.info(`\n⏭️ ${university.name} - Already crawled`);
-          continue;
+        for (const institute of institutes) {
+          combinations.push({ university, institute, year });
         }
-
-        logger.info(`\n🔄 ${university.name} - Crawling...`);
-        await crawlUniversity(page, university, year, config);
       }
     }
+
+    logger.info(`Generated ${combinations.length} combinations to process`);
+
+    // Process all combinations
+    for (const combo of combinations) {
+      const isCrawled = await isAlreadyCrawled({
+        university: combo.university,
+        institute: combo.institute,
+        year: combo.year,
+        progressFile: config.progressFile,
+      });
+
+      if (isCrawled) {
+        logger.info(
+          `\n⏭️ Already crawled | ${combo.university.name} | ${combo.institute.name} | ${combo.year}`
+        );
+        continue;
+      }
+
+      logger.info(
+        `\n🔄 Processing: ${combo.university.name} | ${combo.institute.name} | ${combo.year}`
+      );
+      await crawlCombination(
+        page,
+        combo.university,
+        combo.institute,
+        combo.year,
+        config
+      );
+    }
+
     logger.info("🚀🟢 Main loop completed successfully!");
-    // finish the process
     process.exit(0);
   } catch (error) {
     logger.error("🚀🔴 Error in main loop:", error);
