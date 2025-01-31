@@ -138,6 +138,10 @@ export const crawlCombination = async (
     const filename = `${encodedUniversityName}${separator}${university.id}${separator}${encodedInstituteName}${separator}${institute.id}${separator}${year}.html`;
     const filepath = path.join(getPath(config.downloadDir), filename);
     await fs.writeFile(filepath, html);
+  } else {
+    logger.info(
+      `📜 0 records found | ${university.name} | ${institute.name} | ${year}. Skipping creation of HTML file.`
+    );
   }
 
   await markAsCrawled({
