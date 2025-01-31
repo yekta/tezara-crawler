@@ -4,11 +4,12 @@ import pRetry from "p-retry";
 import type { Page } from "puppeteer";
 import { config } from "./config";
 import { logger } from "./logger";
-import type { CrawlerConfig, Subject, University } from "./types";
+import type { CrawlerConfig, Subject, ThesisType, University } from "./types";
 import {
   getPath,
   isAlreadyCrawled,
   markSubjectAsCrawled,
+  markThesisTypeAsCrawled,
   markUniversityAsCrawled,
 } from "./utils";
 
@@ -20,12 +21,14 @@ export async function crawl({
   universities,
   years,
   subjects,
+  thesisTypes,
   config,
   progressFileContent,
 }: {
   page: Page;
   universities: University[];
   subjects: Subject[];
+  thesisTypes: ThesisType[];
   years: string[];
   config: CrawlerConfig;
   progressFileContent: string;
@@ -48,8 +51,9 @@ export async function crawl({
       await crawlCombination({
         page,
         university,
-        subjects,
         year,
+        subjects,
+        thesisTypes,
         config,
         progressFileContent,
       });
@@ -60,15 +64,17 @@ export async function crawl({
 export async function crawlCombination({
   page,
   university,
-  subjects,
   year,
+  subjects,
+  thesisTypes,
   config,
   progressFileContent,
 }: {
   page: Page;
   university: University;
-  subjects: Subject[];
   year: string;
+  subjects: Subject[];
+  thesisTypes: ThesisType[];
   config: CrawlerConfig;
   progressFileContent: string;
 }): Promise<void> {
@@ -117,9 +123,12 @@ export async function crawlCombination({
 
   // If we're here, we need to try with subjects
   logger.info(
-    `⚠️ Record count (${recordCount}) exceeds limit. Trying with subjects...`
+    `⚠️ Record count (${recordCount}) exceeds limit. Trying with subjects and thesis types...`
   );
 
+  //////////////////
+  //// SUBJECTS ////
+  //////////////////
   for (const subject of subjects) {
     // Skip if already crawled
     const isSubjectCrawled = isAlreadyCrawled({
@@ -144,7 +153,7 @@ export async function crawlCombination({
 
     if (recordCount === 0) {
       logger.info(
-        `📜🟡 No results found | ${university.name} | ${subject.name} | ${year}`
+        `📜🟡 No results found | ${university.name} | ${year} | ${subject.name}`
       );
       markSubjectAsCrawled({
         university,
@@ -163,22 +172,81 @@ export async function crawlCombination({
 
       if (recordCount <= MAX_RECORD_COUNT) {
         logger.info(
-          `📜🟢 Created HTML file | ${university.name} | ${subject.name} | ${year}`
+          `📜🟢 Created HTML file | ${university.name} | ${year} | ${subject.name}`
         );
-        markSubjectAsCrawled({
-          university,
-          subject,
-          year,
-          progressFile: config.progressFile,
-        });
       } else {
         logger.warn(
-          `⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${subject.name} | ${year}`
-        );
-        throw new Error(
-          `🔴 This shouldn't have happened. Record count still exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${subject.name} | ${year}`
+          `SUBJECTS | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${subject.name}`
         );
       }
+
+      markSubjectAsCrawled({
+        university,
+        subject,
+        year,
+        progressFile: config.progressFile,
+      });
+    }
+  }
+
+  for (const thesisType of thesisTypes) {
+    // Skip if already crawled
+    const isThesisTypeCrawled = isAlreadyCrawled({
+      university,
+      year,
+      thesisType,
+      progressFileContent,
+    });
+
+    if (isThesisTypeCrawled) {
+      logger.info(
+        `⏩ Thesis type already crawled | ${university.name} | ${year} | ${thesisType.name}`
+      );
+      continue;
+    }
+
+    const { html, recordCount } = await searchAndCrawl({
+      page,
+      university,
+      year,
+      thesisType,
+    });
+
+    if (recordCount === 0) {
+      logger.info(
+        `📜🟡 No results found | ${university.name} | ${year} | ${thesisType.name}`
+      );
+      markThesisTypeAsCrawled({
+        university,
+        year,
+        thesisType,
+        progressFile: config.progressFile,
+      });
+    } else {
+      const filepath = generateFilePath({
+        dir: config.downloadDir,
+        university,
+        year,
+        thesisType,
+      });
+      await fs.writeFile(filepath, html);
+
+      if (recordCount <= MAX_RECORD_COUNT) {
+        logger.info(
+          `📜🟢 Created HTML file | ${university.name} | ${year} | ${thesisType.name}`
+        );
+      } else {
+        logger.warn(
+          `THESIS_TYPE | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${thesisType.name}`
+        );
+      }
+
+      markThesisTypeAsCrawled({
+        university,
+        year,
+        thesisType,
+        progressFile: config.progressFile,
+      });
     }
   }
 
@@ -194,17 +262,23 @@ function generateFilePath({
   dir,
   university,
   subject,
+  thesisType,
   year,
 }: {
   dir: string;
   university: University;
   year: string;
   subject?: Subject;
+  thesisType?: ThesisType;
 }) {
   const parts = [encodeURIComponent(university.name.replaceAll(" ", ""))];
 
   if (subject) {
     parts.push(encodeURIComponent(subject.name.replaceAll(" ", "")));
+  }
+
+  if (thesisType) {
+    parts.push(encodeURIComponent(thesisType.name.replaceAll(" ", "")));
   }
 
   parts.push(year);
@@ -217,11 +291,13 @@ async function _searchAndCrawl({
   university,
   year,
   subject,
+  thesisType,
 }: {
   page: Page;
   university: University;
   year: string;
   subject?: Subject;
+  thesisType?: ThesisType;
 }): Promise<{ html: string; recordCount: number }> {
   logger.info(
     `🔎 Searching theses | ${university.name} | Year: ${year}${
@@ -237,13 +313,9 @@ async function _searchAndCrawl({
   }
 
   await page.evaluate(
-    (uni, yr, subject) => {
+    (uni, yr, subject, thesisType) => {
       const universeInput = document.querySelector(
         'input[name="Universite"]'
-      ) as HTMLInputElement;
-
-      const subjectInput = document.querySelector(
-        'input[name="Konu"]'
       ) as HTMLInputElement;
 
       const year1Select = document.querySelector(
@@ -252,6 +324,14 @@ async function _searchAndCrawl({
 
       const year2Select = document.querySelector(
         'select[name="yil2"]'
+      ) as HTMLSelectElement;
+
+      const subjectInput = document.querySelector(
+        'input[name="Konu"]'
+      ) as HTMLInputElement;
+
+      const thesisTypeSelect = document.querySelector(
+        'select[name="Tur"]'
       ) as HTMLSelectElement;
 
       const form = document.querySelector(
@@ -264,11 +344,16 @@ async function _searchAndCrawl({
 
       // If subject is provided, fill it
       if (subjectInput && subject) subjectInput.value = subject;
+
+      // If thesis type is provided, fill it
+      if (thesisTypeSelect && thesisType) thesisTypeSelect.value = thesisType;
+
       form?.submit();
     },
     university.id,
     year,
-    subject?.name
+    subject?.name,
+    thesisType?.id
   );
 
   try {
@@ -342,22 +427,29 @@ async function searchAndCrawl({
   university,
   year,
   subject,
+  thesisType,
   retries = 1,
 }: {
   page: Page;
   university: University;
   year: string;
   subject?: Subject;
+  thesisType?: ThesisType;
   retries?: number;
 }) {
-  return pRetry(() => _searchAndCrawl({ page, university, subject, year }), {
-    retries,
-    onFailedAttempt: (error) => {
-      logger.warn(
-        `Attempt ${error.attemptNumber} failed | ${university.name} | ${year}${
-          subject ? ` | ${subject.name}` : ""
-        } | ${error.retriesLeft} retries left.`
-      );
-    },
-  });
+  return pRetry(
+    () => _searchAndCrawl({ page, university, year, subject, thesisType }),
+    {
+      retries,
+      onFailedAttempt: (error) => {
+        logger.warn(
+          `Attempt ${error.attemptNumber} failed | ${
+            university.name
+          } | ${year}${subject ? ` | ${subject.name}` : ""}${
+            thesisType ? ` | ${thesisType.name}` : ""
+          } | ${error.retriesLeft} retries left.`
+        );
+      },
+    }
+  );
 }

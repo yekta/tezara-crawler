@@ -8,6 +8,11 @@ export type Subject = {
   name: string;
 };
 
+export type ThesisType = {
+  id: string;
+  name: string;
+};
+
 export interface CrawlerConfig {
   baseUrl: string;
   downloadDir: string;

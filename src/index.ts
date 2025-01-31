@@ -1,10 +1,10 @@
 import { promises as fs } from "node:fs";
 import * as puppeteer from "puppeteer";
 import { config } from "./config";
+import { crawl } from "./crawler";
+import { getSubjects, getThesisTypes, getUniversities, getYears } from "./get";
 import { logger } from "./logger";
 import { getPath } from "./utils";
-import { getSubjects, getUniversities, getYears } from "./get";
-import { crawl } from "./crawler";
 
 const main = async () => {
   await fs.mkdir(getPath(config.downloadDir), { recursive: true });
@@ -37,9 +37,10 @@ async function mainLoop() {
     const universities = await getUniversities(page);
     const years = await getYears(page);
     const subjects = await getSubjects(page);
+    const thesisTypes = await getThesisTypes(page);
 
     logger.info(
-      `Found ${universities.length} universities, ${subjects.length} subjects, and ${years.length} years`
+      `Found ${universities.length} universities, ${years.length} years, ${subjects.length} subjects, and ${thesisTypes.length} thesis types.`
     );
 
     const progressFileContent = await fs.readFile(
@@ -52,6 +53,7 @@ async function mainLoop() {
       universities,
       years,
       subjects,
+      thesisTypes,
       progressFileContent,
       config,
     });

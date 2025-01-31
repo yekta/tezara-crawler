@@ -1,7 +1,7 @@
 import { Page } from "puppeteer";
-import { University } from "./types";
-import { logger } from "./logger";
 import { MIN_YEAR } from "./crawler";
+import { logger } from "./logger";
+import { ThesisType, University } from "./types";
 
 export async function getUniversities(page: Page): Promise<University[]> {
   logger.info("🎓 Fetching list of universities...");
@@ -95,4 +95,23 @@ export async function getSubjects(page: Page): Promise<University[]> {
   logger.info(`Found ${subjects.length} subjects.`);
   await popup.close();
   return subjects;
+}
+
+export async function getThesisTypes(page: Page): Promise<ThesisType[]> {
+  logger.info("📚 Fetching available thesis types...");
+
+  const thesisTypes = await page.evaluate(() => {
+    const select = document.querySelector('select[name="Tur"]');
+    if (!select) return [];
+
+    return Array.from(select.querySelectorAll("option"))
+      .map((option) => ({
+        id: option.value,
+        name: option.textContent?.trim() || "",
+      }))
+      .filter((type) => type.id !== "0" && type.name);
+  });
+
+  logger.info(`Found ${thesisTypes.length} thesis types`);
+  return thesisTypes;
 }
