@@ -9,6 +9,7 @@ import type { CrawlerConfig, University, Institute } from "./types";
 import { getPath, markAsCrawled } from "./utils";
 
 const MAX_RECORD_COUNT = 2000;
+const MIN_YEAR = 1940;
 
 export const getUniversities = async (page: Page): Promise<University[]> => {
   logger.info("🎓 Fetching list of universities...");
@@ -209,7 +210,7 @@ export const getYears = async (page: Page): Promise<string[]> => {
       .filter((value) => value !== "0")
       .sort((a, b) => Number(b) - Number(a));
   });
-  return years;
+  return years.filter((year) => parseInt(year, 10) >= MIN_YEAR);
 };
 
 export const crawlCombination = async (
