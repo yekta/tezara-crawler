@@ -10,11 +10,6 @@ const __dirname = path.dirname(__filename);
 
 const parseErrors: string[] = [];
 
-// Add tracking for IDs
-let minId: number | null = null;
-let maxId: number | null = null;
-const allIds = new Set<number>();
-
 // Convert AST ObjectExpression to JSON
 const astNodeToJson = (node: any): object | null => {
   if (node.type !== "ObjectExpression") return null;
@@ -43,7 +38,7 @@ const astNodeToJson = (node: any): object | null => {
   return result;
 };
 
-// Extract var doc and detect getData function
+// Extract `var doc` and detect `getData` function
 const extractDataFromScript = (scriptContent: string) => {
   let hasGetData = false;
   const varDocs: object[] = [];
@@ -55,11 +50,13 @@ const extractDataFromScript = (scriptContent: string) => {
     });
 
     walk(ast, {
+      // Detect `getData` function
       FunctionDeclaration(node: any) {
         if (node.id?.name === "getData") {
           hasGetData = true;
         }
       },
+      // Detect `var doc = { ... }`
       VariableDeclaration(node: any) {
         node.declarations.forEach((decl: any) => {
           if (
@@ -76,6 +73,7 @@ const extractDataFromScript = (scriptContent: string) => {
     });
   } catch (error) {
     console.error("Error parsing script content:", error);
+    // Do not throw, since we handle it further up
   }
 
   return { hasGetData, varDocs };
@@ -83,41 +81,15 @@ const extractDataFromScript = (scriptContent: string) => {
 
 let totalExtractedCount = 0;
 
-// Function to track ID statistics
-const trackId = (id: string) => {
-  if (!id) return;
-
-  const numId = parseInt(id);
-  if (isNaN(numId)) return;
-
-  allIds.add(numId);
-
-  if (minId === null || numId < minId) {
-    minId = numId;
-  }
-  if (maxId === null || numId > maxId) {
-    maxId = numId;
-  }
-};
-
-// Function to get missing IDs
-const getMissingIds = (): number[] => {
-  if (minId === null || maxId === null) return [];
-
-  const missing: number[] = [];
-  for (let i = minId; i <= maxId; i++) {
-    if (!allIds.has(i)) {
-      missing.push(i);
-    }
-  }
-  return missing;
-};
-
 // Process a single HTML file
 const processFile = (filePath: string, outputDir: string) => {
   try {
     const htmlContent = fs.readFileSync(filePath, "utf8");
+
+    // 1. Use Cheerio to parse the HTML
     let $ = cheerio.load(htmlContent);
+
+    // 2. Extract all <script> tags
     const scriptElements = $("script");
     console.log(`Found ${scriptElements.length} script tags in ${filePath}`);
 
@@ -137,22 +109,28 @@ const processFile = (filePath: string, outputDir: string) => {
       }
     });
 
+    // Ensure `getData` exists, or record parse error
     if (!hasGetData) {
       console.error(`Error: Missing "getData" function in ${filePath}`);
       parseErrors.push(filePath);
+      // Clean up
       $ = null as any;
       return;
     }
 
+    // If no "var doc" found, skip writi ng JSON
     if (extractedDocs.length === 0) {
       console.log(`No "var doc" found in ${filePath}, skipping.`);
+      // Clean up
       $ = null as any;
       return;
     }
 
+    // Accumulate counts for global tracking
     const transformedDocs = extractedDocs.map((doc) => transformDoc(doc));
     totalExtractedCount += extractedDocs.length;
 
+    // Write results to the corresponding JSON file
     const outputFileName = path.basename(filePath, ".html") + ".json";
     const outputPath = path.join(outputDir, outputFileName);
 
@@ -161,6 +139,7 @@ const processFile = (filePath: string, outputDir: string) => {
       `Processed ${filePath} -> ${outputPath}. Entries extracted: ${transformedDocs.length}`
     );
 
+    // Release Cheerio references
     $ = null as any;
   } catch (error) {
     console.error(`Error processing ${filePath}:`, error);
@@ -170,6 +149,7 @@ const processFile = (filePath: string, outputDir: string) => {
 
 // Process all files
 const processAllFiles = () => {
+  // We assume this script is under src/, so ../downloads will be the correct path
   const inputDir = path.resolve(__dirname, "../../downloads");
   const outputDir = path.resolve(__dirname, "../../jsons");
 
@@ -186,36 +166,24 @@ const processAllFiles = () => {
     processFile(filePath, outputDir);
   });
 
-  // Write ID statistics
-  const idStatsPath = path.join(outputDir, "../../parse-json-stats.json");
-  const missingIds = getMissingIds();
-  const idStats = {
-    minId,
-    maxId,
-    totalUniqueIds: allIds.size,
-    missingIds,
-    missingIdsCount: missingIds.length,
-  };
-
-  fs.writeFileSync(idStatsPath, JSON.stringify(idStats, null, 2));
-  console.log(`\nID Statistics saved to ${idStatsPath}`);
-  console.log(`Min ID: ${minId}`);
-  console.log(`Max ID: ${maxId}`);
-  console.log(`Total unique IDs: ${allIds.size}`);
-  console.log(`Missing IDs count: ${missingIds.length}`);
-
   console.log(
     `\nTotal extracted entries across all files: ${totalExtractedCount}`
   );
 
+  // Write parse-errors.txt if there are any
   if (parseErrors.length > 0) {
-    const errorsPath = path.join(outputDir, "../../parse-json-errors.txt");
+    // Use outputDir, then go one level up (..) so parse-errors.txt sits at the same level as jsons.
+    const errorsPath = path.join(outputDir, "../json-parse-errors.txt");
+
     fs.writeFileSync(errorsPath, parseErrors.join("\n"), "utf8");
     console.log(
       `\nEncountered errors in ${parseErrors.length} file(s). Names saved to ${errorsPath}`
     );
   }
 };
+
+// Execute the script
+processAllFiles();
 
 function parseUserId(userIdHtml: string) {
   const match = userIdHtml.match(
@@ -225,11 +193,6 @@ function parseUserId(userIdHtml: string) {
     return { thesis_id: null, id1: null, id2: null };
   }
   const [, id_1, id_2, thesisId] = match;
-
-  // Track both IDs
-  trackId(id_1);
-  trackId(id_2);
-
   return {
     thesis_id: thesisId,
     id_1,
@@ -243,7 +206,9 @@ function parseTitles(weightHtml: string) {
   const title_translated = translatedSpan.text().trim();
 
   translatedSpan.remove();
+
   $("br").replaceWith(" ");
+
   const title_original = $.root().text().trim();
 
   return { title_original, title_translated };
@@ -251,10 +216,12 @@ function parseTitles(weightHtml: string) {
 
 function parseSubjects(someDate: string) {
   const subjectPairs = (someDate || "").split(";").map((x) => x.trim());
+
   const subjects_turkish: string[] = [];
   const subjects_english: string[] = [];
 
   subjectPairs.forEach((pair) => {
+    // e.g. "Biyoloji = Biology"
     const [turk, eng] = pair.split("=").map((x) => x.trim());
     if (turk) subjects_turkish.push(turk);
     if (eng) subjects_english.push(eng);
@@ -289,6 +256,3 @@ function transformDoc(originalDoc: any) {
     subjects_english,
   };
 }
-
-// Execute the script
-processAllFiles();
