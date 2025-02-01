@@ -4,16 +4,23 @@ import pRetry from "p-retry";
 import type { Page } from "puppeteer";
 import { config } from "./config";
 import { logger } from "./logger";
-import type { CrawlerConfig, Subject, ThesisType, University } from "./types";
+import type {
+  CrawlerConfig,
+  Institute,
+  Subject,
+  ThesisType,
+  University,
+} from "./types";
 import {
   getPath,
   isAlreadyCrawled,
+  markInstituteAsCrawled,
   markSubjectAsCrawled,
   markThesisTypeAsCrawled,
   markUniversityAsCrawled,
 } from "./utils";
 
-export const MAX_RECORD_COUNT = 2000;
+export const MAX_RECORD_COUNT = 1900;
 export const MIN_YEAR = 1940;
 
 export async function crawl({
@@ -21,6 +28,7 @@ export async function crawl({
   universities,
   years,
   subjects,
+  institutes,
   thesisTypes,
   config,
   progressFileContent,
@@ -28,6 +36,7 @@ export async function crawl({
   page: Page;
   universities: University[];
   subjects: Subject[];
+  institutes: Institute[];
   thesisTypes: ThesisType[];
   years: string[];
   config: CrawlerConfig;
@@ -53,6 +62,7 @@ export async function crawl({
         university,
         year,
         subjects,
+        institutes,
         thesisTypes,
         config,
         progressFileContent,
@@ -66,6 +76,7 @@ export async function crawlCombination({
   university,
   year,
   subjects,
+  institutes,
   thesisTypes,
   config,
   progressFileContent,
@@ -74,6 +85,7 @@ export async function crawlCombination({
   university: University;
   year: string;
   subjects: Subject[];
+  institutes: Institute[];
   thesisTypes: ThesisType[];
   config: CrawlerConfig;
   progressFileContent: string;
@@ -192,6 +204,75 @@ export async function crawlCombination({
     }
   }
 
+  ////////////////////
+  //// INSTITUTES ////
+  ////////////////////
+  for (const institute of institutes) {
+    // Skip if already crawled
+    const isInstituteCrawled = isAlreadyCrawled({
+      university,
+      year,
+      institute,
+      progressFileContent,
+    });
+    if (isInstituteCrawled) {
+      logger.info(
+        `⏩ Institute already crawled | ${university.name} | ${year} | ${institute.name}`
+      );
+      continue;
+    }
+
+    const { html, recordCount } = await searchAndCrawl({
+      page,
+      university,
+      year,
+      institute,
+    });
+
+    if (recordCount === 0) {
+      logger.info(
+        `📜🟡 No results found | ${university.name} | ${year} | ${institute.name}`
+      );
+      markInstituteAsCrawled({
+        university,
+        year,
+        institute,
+        progressFile: config.progressFile,
+      });
+    } else {
+      const filepath = generateFilePath({
+        dir: config.downloadDir,
+        university,
+        institute,
+        year,
+      });
+      await fs.writeFile(filepath, html);
+
+      if (recordCount <= MAX_RECORD_COUNT) {
+        logger.info(
+          `📜🟢 Created HTML file | ${university.name} | ${year} | ${institute.name}`
+        );
+      } else {
+        logger.info(
+          `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${institute.name}`
+        );
+        logger.warn(
+          `INSTITUTES | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${institute.name}`
+        );
+      }
+
+      markInstituteAsCrawled({
+        university,
+        year,
+        institute,
+        progressFile: config.progressFile,
+      });
+    }
+  }
+
+  /////////////////////
+  //// THESIS TYPE ////
+  /////////////////////
   for (const thesisType of thesisTypes) {
     // Skip if already crawled
     const isThesisTypeCrawled = isAlreadyCrawled({
@@ -267,20 +348,26 @@ export async function crawlCombination({
 function generateFilePath({
   dir,
   university,
-  subject,
-  thesisType,
   year,
+  subject,
+  institute,
+  thesisType,
 }: {
   dir: string;
   university: University;
   year: string;
   subject?: Subject;
+  institute?: Institute;
   thesisType?: ThesisType;
 }) {
   const parts = [encodeURIComponent(university.name.replaceAll(" ", ""))];
 
   if (subject) {
     parts.push(encodeURIComponent(subject.name.replaceAll(" ", "")));
+  }
+
+  if (institute) {
+    parts.push(encodeURIComponent(institute.name.replaceAll(" ", "")));
   }
 
   if (thesisType) {
@@ -297,12 +384,14 @@ async function _searchAndCrawl({
   university,
   year,
   subject,
+  institute,
   thesisType,
 }: {
   page: Page;
   university: University;
   year: string;
   subject?: Subject;
+  institute?: Institute;
   thesisType?: ThesisType;
 }): Promise<{ html: string; recordCount: number }> {
   logger.info(
@@ -319,7 +408,7 @@ async function _searchAndCrawl({
   }
 
   await page.evaluate(
-    (uni, yr, subject, thesisType) => {
+    (uni, yr, subject, institute, thesisType) => {
       const universeInput = document.querySelector(
         'input[name="Universite"]'
       ) as HTMLInputElement;
@@ -334,6 +423,10 @@ async function _searchAndCrawl({
 
       const subjectInput = document.querySelector(
         'input[name="Konu"]'
+      ) as HTMLInputElement;
+
+      const instituteInput = document.querySelector(
+        'input[name="Enstitu"]'
       ) as HTMLInputElement;
 
       const thesisTypeSelect = document.querySelector(
@@ -351,6 +444,9 @@ async function _searchAndCrawl({
       // If subject is provided, fill it
       if (subjectInput && subject) subjectInput.value = subject;
 
+      // If institute is provided, fill it
+      if (instituteInput && institute) instituteInput.value = institute;
+
       // If thesis type is provided, fill it
       if (thesisTypeSelect && thesisType) thesisTypeSelect.value = thesisType;
 
@@ -359,6 +455,7 @@ async function _searchAndCrawl({
     university.id,
     year,
     subject?.name,
+    institute?.id,
     thesisType?.id
   );
 
@@ -433,6 +530,7 @@ async function searchAndCrawl({
   university,
   year,
   subject,
+  institute,
   thesisType,
   retries = 1,
 }: {
@@ -440,11 +538,20 @@ async function searchAndCrawl({
   university: University;
   year: string;
   subject?: Subject;
+  institute?: Institute;
   thesisType?: ThesisType;
   retries?: number;
 }) {
   return pRetry(
-    () => _searchAndCrawl({ page, university, year, subject, thesisType }),
+    () =>
+      _searchAndCrawl({
+        page,
+        university,
+        year,
+        subject,
+        institute,
+        thesisType,
+      }),
     {
       retries,
       onFailedAttempt: (error) => {

@@ -2,7 +2,13 @@ import { promises as fs } from "node:fs";
 import * as puppeteer from "puppeteer";
 import { config } from "./config";
 import { crawl } from "./crawler";
-import { getSubjects, getThesisTypes, getUniversities, getYears } from "./get";
+import {
+  getInstitutes,
+  getSubjects,
+  getThesisTypes,
+  getUniversities,
+  getYears,
+} from "./get";
 import { logger } from "./logger";
 import { getPath } from "./utils";
 
@@ -37,10 +43,11 @@ async function mainLoop() {
     const universities = await getUniversities(page);
     const years = await getYears(page);
     const subjects = await getSubjects(page);
+    const institutes = await getInstitutes(page);
     const thesisTypes = await getThesisTypes(page);
 
     logger.info(
-      `Found ${universities.length} universities, ${years.length} years, ${subjects.length} subjects, and ${thesisTypes.length} thesis types.`
+      `Found ${universities.length} universities, ${years.length} years, ${subjects.length} subjects, ${institutes.length} institutes, and ${thesisTypes.length} thesis types.`
     );
 
     const progressFileContent = await fs.readFile(
@@ -53,6 +60,7 @@ async function mainLoop() {
       universities,
       years,
       subjects,
+      institutes,
       thesisTypes,
       progressFileContent,
       config,

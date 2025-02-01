@@ -1,7 +1,7 @@
 import { Page } from "puppeteer";
 import { MIN_YEAR } from "./crawler";
 import { logger } from "./logger";
-import { ThesisType, University } from "./types";
+import { Institute, ThesisType, University } from "./types";
 
 export async function getUniversities(page: Page): Promise<University[]> {
   logger.info("🎓 Fetching list of universities...");
@@ -95,6 +95,46 @@ export async function getSubjects(page: Page): Promise<University[]> {
   logger.info(`Found ${subjects.length} subjects.`);
   await popup.close();
   return subjects;
+}
+
+export async function getInstitutes(page: Page): Promise<Institute[]> {
+  logger.info("🏛️ Fetching list of institutes...");
+
+  const [popup] = await Promise.all([
+    new Promise<Page | null>((resolve) =>
+      page.browser().once("targetcreated", async (target) => {
+        const newPage = await target.page();
+        resolve(newPage);
+      })
+    ),
+    page.click('input[onclick="ensEkle();"]'),
+  ]);
+
+  if (!popup) {
+    throw new Error("Failed to open institute selection popup");
+  }
+
+  logger.info("Popup opened, waiting for content...");
+  await popup.waitForSelector("table#sf", { timeout: 10000 });
+
+  const institutes = await popup.$$eval('a[href*="eklecikar"]', (links) =>
+    links
+      .map((link) => {
+        const href = link.getAttribute("href");
+        const name = link.textContent?.trim();
+        if (!href || !name) return null;
+
+        const match = href.match(/eklecikar\('(.+?)','(\d+)'/);
+        if (!match) return null;
+
+        return { name: match[1], id: match[2] };
+      })
+      .filter((uni): uni is University => uni !== null)
+  );
+
+  logger.info(`Found ${institutes.length} institutes.`);
+  await popup.close();
+  return institutes;
 }
 
 export async function getThesisTypes(page: Page): Promise<ThesisType[]> {

@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { Subject, ThesisType, University } from "./types.js";
+import type { Institute, Subject, ThesisType, University } from "./types.js";
 import { fileURLToPath } from "node:url";
 import { logger } from "./logger.js";
 
@@ -51,17 +51,33 @@ export function getThesisTypeKey({
   }|${thesisType.name.replaceAll(" ", "")}]`;
 }
 
+export function getInstituteKey({
+  university,
+  year,
+  institute,
+}: {
+  university: University;
+  year: string;
+  institute: Institute;
+}): string {
+  return `[${university.id}|${university.name.replaceAll(" ", "")}|${year}|${
+    institute.id
+  }|${institute.name.replaceAll(" ", "")}]`;
+}
+
 export function isAlreadyCrawled({
   university,
   year,
   subject,
   thesisType,
+  institute,
   progressFileContent,
 }: {
   university: University;
   year: string;
   subject?: Subject;
   thesisType?: ThesisType;
+  institute?: Institute;
   progressFileContent: string;
 }): boolean {
   // Check if we have a university-level entry
@@ -74,6 +90,14 @@ export function isAlreadyCrawled({
   if (subject) {
     const subjectKey = getSubjectKey({ university, subject, year });
     if (progressFileContent.includes(subjectKey)) {
+      return true;
+    }
+  }
+
+  // Check if we have an institute-level entry
+  if (institute) {
+    const instituteKey = getInstituteKey({ university, institute, year });
+    if (progressFileContent.includes(instituteKey)) {
       return true;
     }
   }
@@ -116,6 +140,22 @@ export async function markSubjectAsCrawled({
 }): Promise<void> {
   const key = getSubjectKey({ university, subject, year });
   logger.info(`🖊️ Marking subject as crawled | ${key}`);
+  await fs.appendFile(getPath(progressFile), key + "\n");
+}
+
+export async function markInstituteAsCrawled({
+  university,
+  year,
+  institute,
+  progressFile,
+}: {
+  university: University;
+  year: string;
+  institute: Institute;
+  progressFile: string;
+}): Promise<void> {
+  const key = getInstituteKey({ university, year, institute });
+  logger.info(`🖊️ Marking institute as crawled | ${key}`);
   await fs.appendFile(getPath(progressFile), key + "\n");
 }
 

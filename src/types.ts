@@ -13,6 +13,11 @@ export type ThesisType = {
   name: string;
 };
 
+export type Institute = {
+  id: string;
+  name: string;
+};
+
 export interface CrawlerConfig {
   baseUrl: string;
   downloadDir: string;
