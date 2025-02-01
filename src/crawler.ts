@@ -497,6 +497,10 @@ async function _searchAndCrawl({
   });
 
   const match = cleanedText.match(/(\d+) kayıt/);
+  if (match === null || match.length < 2) {
+    throw new Error("🔴 Record count not found");
+  }
+
   const recordCount = match ? parseInt(match[1], 10) : 0;
   logger.info(`Found ${recordCount} records.`);
   if (recordCount > MAX_RECORD_COUNT) {
