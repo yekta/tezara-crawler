@@ -167,7 +167,7 @@ export async function crawlCombination({
       logger.info(
         `📜🟡 No results found | ${university.name} | ${year} | ${subject.name}`
       );
-      markSubjectAsCrawled({
+      await markSubjectAsCrawled({
         university,
         subject,
         year,
@@ -195,7 +195,7 @@ export async function crawlCombination({
         );
       }
 
-      markSubjectAsCrawled({
+      await markSubjectAsCrawled({
         university,
         subject,
         year,
@@ -233,7 +233,7 @@ export async function crawlCombination({
       logger.info(
         `📜🟡 No results found | ${university.name} | ${year} | ${institute.name}`
       );
-      markInstituteAsCrawled({
+      await markInstituteAsCrawled({
         university,
         year,
         institute,
@@ -261,7 +261,7 @@ export async function crawlCombination({
         );
       }
 
-      markInstituteAsCrawled({
+      await markInstituteAsCrawled({
         university,
         year,
         institute,
@@ -300,7 +300,7 @@ export async function crawlCombination({
       logger.info(
         `📜🟡 No results found | ${university.name} | ${year} | ${thesisType.name}`
       );
-      markThesisTypeAsCrawled({
+      await markThesisTypeAsCrawled({
         university,
         year,
         thesisType,
@@ -328,7 +328,7 @@ export async function crawlCombination({
         );
       }
 
-      markThesisTypeAsCrawled({
+      await markThesisTypeAsCrawled({
         university,
         year,
         thesisType,
