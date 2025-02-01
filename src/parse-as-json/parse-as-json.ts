@@ -9,9 +9,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const parseErrors: string[] = [];
+const allThesisIds = new Set<number>();
 
 // Convert AST ObjectExpression to JSON
-const astNodeToJson = (node: any): object | null => {
+function astNodeToJson(node: any): object | null {
   if (node.type !== "ObjectExpression") return null;
 
   const result: any = {};
@@ -36,10 +37,10 @@ const astNodeToJson = (node: any): object | null => {
   });
 
   return result;
-};
+}
 
 // Extract `var doc` and detect `getData` function
-const extractDataFromScript = (scriptContent: string) => {
+function extractDataFromScript(scriptContent: string) {
   let hasGetData = false;
   const varDocs: object[] = [];
 
@@ -77,12 +78,10 @@ const extractDataFromScript = (scriptContent: string) => {
   }
 
   return { hasGetData, varDocs };
-};
-
-let totalExtractedCount = 0;
+}
 
 // Process a single HTML file
-const processFile = (filePath: string, outputDir: string) => {
+function processFile(filePath: string, outputDir: string) {
   try {
     const htmlContent = fs.readFileSync(filePath, "utf8");
 
@@ -128,7 +127,15 @@ const processFile = (filePath: string, outputDir: string) => {
 
     // Accumulate counts for global tracking
     const transformedDocs = extractedDocs.map((doc) => transformDoc(doc));
-    totalExtractedCount += extractedDocs.length;
+
+    transformedDocs.forEach((doc) => {
+      if (doc.thesis_id) {
+        const thesisIdNum = parseInt(doc.thesis_id);
+        if (!isNaN(thesisIdNum)) {
+          allThesisIds.add(thesisIdNum);
+        }
+      }
+    });
 
     // Write results to the corresponding JSON file
     const outputFileName = path.basename(filePath, ".html") + ".json";
@@ -145,10 +152,10 @@ const processFile = (filePath: string, outputDir: string) => {
     console.error(`Error processing ${filePath}:`, error);
     parseErrors.push(filePath);
   }
-};
+}
 
 // Process all files
-const processAllFiles = () => {
+function processAllFiles() {
   // We assume this script is under src/, so ../downloads will be the correct path
   const inputDir = path.resolve(__dirname, "../../downloads");
   const outputDir = path.resolve(__dirname, "../../jsons");
@@ -166,10 +173,6 @@ const processAllFiles = () => {
     processFile(filePath, outputDir);
   });
 
-  console.log(
-    `\nTotal extracted entries across all files: ${totalExtractedCount}`
-  );
-
   // Write parse-errors.txt if there are any
   if (parseErrors.length > 0) {
     // Use outputDir, then go one level up (..) so parse-errors.txt sits at the same level as jsons.
@@ -180,7 +183,9 @@ const processAllFiles = () => {
       `\nEncountered errors in ${parseErrors.length} file(s). Names saved to ${errorsPath}`
     );
   }
-};
+
+  analyzeThesisIds();
+}
 
 // Execute the script
 processAllFiles();
@@ -255,4 +260,34 @@ function transformDoc(originalDoc: any) {
     subjects_turkish,
     subjects_english,
   };
+}
+
+function analyzeThesisIds() {
+  if (allThesisIds.size === 0) {
+    console.log("\nNo thesis IDs found in the processed files.");
+    return;
+  }
+
+  const sortedIds = Array.from(allThesisIds).sort((a, b) => a - b);
+  const minId = sortedIds[0];
+  const maxId = sortedIds[sortedIds.length - 1];
+
+  // Find missing IDs
+  const missingIds: number[] = [];
+  for (let i = minId; i <= maxId; i++) {
+    if (!allThesisIds.has(i)) {
+      missingIds.push(i);
+    }
+  }
+
+  console.log(`\nThesis ID Analysis:`);
+  if (missingIds.length > 0) {
+    console.log(`\nMissing thesis IDs (${missingIds.length} total):`);
+    console.log(missingIds.join(", "));
+  } else {
+    console.log("\nNo missing thesis IDs in the sequence!");
+  }
+  console.log(`Minimum thesis ID: ${minId}`);
+  console.log(`Maximum thesis ID: ${maxId}`);
+  console.log(`Total unique thesis IDs: ${allThesisIds.size}`);
 }
