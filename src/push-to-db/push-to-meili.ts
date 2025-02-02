@@ -21,7 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const processedFilesPath = resolve(__dirname, "../../progress-meili.txt");
-const inputDir = resolve(__dirname, "../../jsons-cleaned/json");
+const inputDir = resolve(__dirname, "../../jsons-cleaned/jsons-unique");
 
 if (!existsSync(processedFilesPath)) {
   writeFileSync(processedFilesPath, "", "utf-8");

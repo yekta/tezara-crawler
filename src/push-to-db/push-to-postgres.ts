@@ -30,7 +30,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const processedFilesPath = resolve(__dirname, "../../progress-postgres.txt");
-const folderPath = resolve(__dirname, "../../jsons-extended");
+const folderPath = resolve(__dirname, "../../jsons-cleaned/jsons-unique");
 
 if (!existsSync(processedFilesPath)) {
   writeFileSync(processedFilesPath, "", "utf-8");

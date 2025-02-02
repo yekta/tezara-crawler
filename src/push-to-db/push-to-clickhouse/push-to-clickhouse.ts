@@ -11,7 +11,13 @@ import { client } from "./client";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const inputDir = path.join(__dirname, "..", "..", "..", "jsons-cleaned/json");
+const inputDir = path.join(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "jsons-cleaned/jsons-unique"
+);
 
 type Keyword = {
   name: string;
