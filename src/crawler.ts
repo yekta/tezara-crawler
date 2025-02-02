@@ -406,8 +406,6 @@ async function _searchAndCrawl({
       waitUntil: "domcontentloaded",
       timeout: 10000,
     });
-  } else {
-    console.log("Already at base URL");
   }
 
   await page.evaluate(
