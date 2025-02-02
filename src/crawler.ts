@@ -401,10 +401,13 @@ async function _searchAndCrawl({
   );
 
   if (page.url() !== config.baseUrl) {
+    console.log("Navigating to base URL");
     await page.goto(config.baseUrl, {
       waitUntil: "domcontentloaded",
       timeout: 10000,
     });
+  } else {
+    console.log("Already at base URL");
   }
 
   await page.evaluate(
@@ -525,6 +528,8 @@ async function _searchAndCrawl({
       }`
     );
   }
+
+  await page.goBack();
 
   return { html, recordCount };
 }
