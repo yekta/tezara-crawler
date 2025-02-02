@@ -143,7 +143,7 @@ async function main(batchSize = 100): Promise<void> {
       `\n\n\n🟢 Processed ${processedFileCount.toLocaleString()} thesis records from input.`
     );
     console.log(
-      `🟢 Cleaned unique theses count: ${allTheses.size.toLocaleString()}`
+      `🟢 Cleaned unique thesis count: ${allTheses.size.toLocaleString()}`
     );
     console.log(
       `🟢 Total problems fixed: ${grandTotalProblems.toLocaleString()}`
