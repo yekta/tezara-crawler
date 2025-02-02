@@ -39,7 +39,7 @@ async function main(batchSize = 100): Promise<void> {
     const thesisTypes = new Set<string>();
     const languages = new Set<string>();
     const pageCounts = new Set<string>();
-    const years = new Set<string>();
+    const years = new Map<string, number>();
     const allTheses = new Map<number, TFinalThesis>();
 
     for (let i = 0; i < jsonFiles.length; i += batchSize) {
@@ -75,7 +75,14 @@ async function main(batchSize = 100): Promise<void> {
       thesisTypesBatch.forEach((t) => thesisTypes.add(t));
       languagesBatch.forEach((l) => languages.add(l));
       pageCountsBatch.forEach((p) => pageCounts.add(p));
-      yearsBatch.forEach((y) => years.add(y));
+      yearsBatch.forEach((count, year) => {
+        const yearThesisCount = years.get(year);
+        if (yearThesisCount) {
+          years.set(year, yearThesisCount + count);
+        } else {
+          years.set(year, count);
+        }
+      });
 
       grandTotalProblems += totalProblems;
       processedFileCount += fileCount;
@@ -135,7 +142,9 @@ async function main(batchSize = 100): Promise<void> {
 
     const yearsFilePath = path.join(outputDir, "txt", "years.txt");
     createOrAppendToFile({
-      data: Array.from(years),
+      data: Array.from(years)
+        .sort(([year1], [year2]) => parseInt(year1) - parseInt(year2))
+        .map(([year, count]) => `${year} = ${count}`),
       path: yearsFilePath,
     });
 
@@ -220,7 +229,7 @@ function processBatch({
   const thesisTypes = new Set<string>();
   const languages = new Set<string>();
   const pageCounts = new Set<string>();
-  const years = new Set<string>();
+  const years = new Map<string, number>();
 
   allThesesCleaned.forEach((thesis) => {
     authors.add(thesis.author);
@@ -247,7 +256,13 @@ function processBatch({
     if (thesis.page_count) {
       pageCounts.add(thesis.page_count.toString());
     }
-    years.add(thesis.year.toString());
+
+    const yearThesisCount = years.get(thesis.year.toString());
+    if (yearThesisCount) {
+      years.set(thesis.year.toString(), yearThesisCount + 1);
+    } else {
+      years.set(thesis.year.toString(), 1);
+    }
 
     detailIds.add(`${thesis.detail_id_1} ||| ${thesis.detail_id_2}`);
 
