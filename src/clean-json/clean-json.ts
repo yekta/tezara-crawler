@@ -144,7 +144,7 @@ async function main(batchSize = 100): Promise<void> {
     createOrAppendToFile({
       data: Array.from(years)
         .sort(([year1], [year2]) => parseInt(year1) - parseInt(year2))
-        .map(([year, count]) => `${year} = ${count}`),
+        .map(([year, count]) => `${year} = ${count.toLocaleString()}`),
       path: yearsFilePath,
     });
 
