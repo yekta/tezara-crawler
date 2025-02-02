@@ -517,8 +517,6 @@ async function _searchAndCrawl({
     );
   }
 
-  await page.goBack();
-
   return { html, recordCount };
 }
 
