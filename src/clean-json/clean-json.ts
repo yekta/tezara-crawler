@@ -14,7 +14,7 @@ import { FinalThesisSchema, TFinalThesis } from "./schema";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function main(batchSize = 100): Promise<void> {
+async function main(mainBatchSize = 100): Promise<void> {
   try {
     const inputDir = path.join(__dirname, "..", "..", "jsons-extended");
     const outputDir = path.join(__dirname, "..", "..", "jsons-cleaned");
@@ -42,10 +42,10 @@ async function main(batchSize = 100): Promise<void> {
     const years = new Map<string, number>();
     const allTheses = new Map<number, TFinalThesis>();
 
-    for (let i = 0; i < jsonFiles.length; i += batchSize) {
+    for (let i = 0; i < jsonFiles.length; i += mainBatchSize) {
       console.log(
         `Processing batch: ${i.toLocaleString()} to ${(
-          i + batchSize
+          i + mainBatchSize
         ).toLocaleString()}`
       );
       const {
@@ -61,7 +61,7 @@ async function main(batchSize = 100): Promise<void> {
         pageCounts: pageCountsBatch,
         years: yearsBatch,
       } = processBatch({
-        files: jsonFiles.slice(i, i + batchSize),
+        files: jsonFiles.slice(i, i + mainBatchSize),
         inputDir,
         outputDir,
       });
@@ -89,14 +89,14 @@ async function main(batchSize = 100): Promise<void> {
 
       console.log(
         `Finished processing batch: ${i.toLocaleString()}-${(
-          i + batchSize
+          i + mainBatchSize
         ).toLocaleString()}`
       );
     }
 
     const universitiesFilePath = path.join(
       outputDir,
-      "txt",
+      "txts",
       "universities.txt"
     );
     createOrAppendToFile({
@@ -104,49 +104,62 @@ async function main(batchSize = 100): Promise<void> {
       path: universitiesFilePath,
     });
 
-    const institutesFilePath = path.join(outputDir, "txt", "institutes.txt");
+    const institutesFilePath = path.join(outputDir, "txts", "institutes.txt");
     createOrAppendToFile({
       data: Array.from(institutes),
       path: institutesFilePath,
     });
 
-    const departmentsFilePath = path.join(outputDir, "txt", "departments.txt");
+    const departmentsFilePath = path.join(outputDir, "txts", "departments.txt");
     createOrAppendToFile({
       data: Array.from(departments),
       path: departmentsFilePath,
     });
 
-    const branchesFilePath = path.join(outputDir, "txt", "branches.txt");
+    const branchesFilePath = path.join(outputDir, "txts", "branches.txt");
     createOrAppendToFile({
       data: Array.from(branches),
       path: branchesFilePath,
     });
 
-    const thesisTypesFilePath = path.join(outputDir, "txt", "thesis_types.txt");
+    const thesisTypesFilePath = path.join(
+      outputDir,
+      "txts",
+      "thesis_types.txt"
+    );
     createOrAppendToFile({
       data: Array.from(thesisTypes),
       path: thesisTypesFilePath,
     });
 
-    const languagesFilePath = path.join(outputDir, "txt", "languages.txt");
+    const languagesFilePath = path.join(outputDir, "txts", "languages.txt");
     createOrAppendToFile({
       data: Array.from(languages),
       path: languagesFilePath,
     });
 
-    const pageCountsFilePath = path.join(outputDir, "txt", "page_counts.txt");
+    const pageCountsFilePath = path.join(outputDir, "txts", "page_counts.txt");
     createOrAppendToFile({
       data: Array.from(pageCounts),
       path: pageCountsFilePath,
     });
 
-    const yearsFilePath = path.join(outputDir, "txt", "years.txt");
+    const yearsFilePath = path.join(outputDir, "txts", "years.txt");
     createOrAppendToFile({
       data: Array.from(years)
         .sort(([year1], [year2]) => parseInt(year1) - parseInt(year2))
         .map(([year, count]) => `${year} = ${count.toLocaleString()}`),
       path: yearsFilePath,
     });
+
+    const batchSize = 10_000;
+    const arr = Array.from(allTheses.values());
+    for (let i = 0; i < arr.length; i += batchSize) {
+      const batch = arr.slice(i, i + batchSize);
+      const hash = md5Hash(batch.map((t) => t.id).join(","));
+      const filePath = path.join(outputDir, "jsons", `${hash}.json`);
+      fs.writeFileSync(filePath, JSON.stringify(batch, null, 2));
+    }
 
     console.info(
       `\n\n\n🟢 Processed ${processedFileCount.toLocaleString()} thesis records from input.`
@@ -196,7 +209,7 @@ function processBatch({
   // split the array to 4 parts
   let allArrays: TFinalThesis[][] = [];
   const chunkSize = 10_000;
-  const outputFolder = path.join(outputDir, "json");
+  const outputFolder = path.join(outputDir, "jsons");
   if (!fs.existsSync(outputFolder)) {
     fs.mkdirSync(outputFolder, { recursive: true });
   }
@@ -278,18 +291,18 @@ function processBatch({
     }
   });
 
-  const authorsFilePath = path.join(outputDir, "txt", "authors.txt");
+  const authorsFilePath = path.join(outputDir, "txts", "authors.txt");
   createOrAppendToFile({ path: authorsFilePath, data: Array.from(authors) });
 
-  const advisorsFilePath = path.join(outputDir, "txt", "advisors.txt");
+  const advisorsFilePath = path.join(outputDir, "txts", "advisors.txt");
   createOrAppendToFile({ path: advisorsFilePath, data: Array.from(advisors) });
 
-  const titlesFilePath = path.join(outputDir, "txt", "titles.txt");
+  const titlesFilePath = path.join(outputDir, "txts", "titles.txt");
   createOrAppendToFile({ path: titlesFilePath, data: Array.from(titles) });
 
   const translatedTitlesFilePath = path.join(
     outputDir,
-    "txt",
+    "txts",
     "translated_titles.txt"
   );
   createOrAppendToFile({
@@ -297,22 +310,22 @@ function processBatch({
     data: Array.from(translatedTitles),
   });
 
-  const pdfUrlsFilePath = path.join(outputDir, "txt", "pdf_urls.txt");
+  const pdfUrlsFilePath = path.join(outputDir, "txts", "pdf_urls.txt");
   createOrAppendToFile({ path: pdfUrlsFilePath, data: Array.from(pdfUrls) });
 
-  const detailIdsFilePath = path.join(outputDir, "txt", "detail_ids.txt");
+  const detailIdsFilePath = path.join(outputDir, "txts", "detail_ids.txt");
   createOrAppendToFile({
     path: detailIdsFilePath,
     data: Array.from(detailIds),
   });
 
-  const subjectsFilePath = path.join(outputDir, "txt", "subjects.txt");
+  const subjectsFilePath = path.join(outputDir, "txts", "subjects.txt");
   createOrAppendToFile({
     path: subjectsFilePath,
     data: Array.from(subjects),
   });
 
-  const keywordsFilePath = path.join(outputDir, "txt", "keywords.txt");
+  const keywordsFilePath = path.join(outputDir, "txts", "keywords.txt");
   createOrAppendToFile({
     path: keywordsFilePath,
     data: Array.from(keywords),
