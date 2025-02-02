@@ -153,11 +153,15 @@ async function main(mainBatchSize = 100): Promise<void> {
     });
 
     const batchSize = 10_000;
+    const jsonDir = "jsons-unique";
     const arr = Array.from(allTheses.values());
     for (let i = 0; i < arr.length; i += batchSize) {
       const batch = arr.slice(i, i + batchSize);
       const hash = md5Hash(batch.map((t) => t.id).join(","));
-      const filePath = path.join(outputDir, "jsons-unique", `${hash}.json`);
+      if (!fs.existsSync(jsonDir)) {
+        fs.mkdirSync(jsonDir, { recursive: true });
+      }
+      const filePath = path.join(outputDir, jsonDir, `${hash}.json`);
       fs.writeFileSync(filePath, JSON.stringify(batch, null, 2));
     }
 
