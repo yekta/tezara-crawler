@@ -157,7 +157,7 @@ async function main(mainBatchSize = 100): Promise<void> {
     for (let i = 0; i < arr.length; i += batchSize) {
       const batch = arr.slice(i, i + batchSize);
       const hash = md5Hash(batch.map((t) => t.id).join(","));
-      const filePath = path.join(outputDir, "jsons", `${hash}.json`);
+      const filePath = path.join(outputDir, "jsons-unique", `${hash}.json`);
       fs.writeFileSync(filePath, JSON.stringify(batch, null, 2));
     }
 
