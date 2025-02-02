@@ -391,7 +391,6 @@ async function _searchAndCrawl({
   );
 
   if (page.url() !== config.baseUrl) {
-    console.log("Navigating to base URL");
     await page.goto(config.baseUrl, {
       waitUntil: "domcontentloaded",
       timeout: 10000,
