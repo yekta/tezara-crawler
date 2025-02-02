@@ -51,9 +51,6 @@ export async function crawl({
       });
 
       if (isUniversityCrawled) {
-        logger.info(
-          `⏩ University + Year already crawled | ${university.name} | ${year}`
-        );
         continue;
       }
 
@@ -149,10 +146,8 @@ export async function crawlCombination({
       subject,
       progressFileContent,
     });
+
     if (isSubjectCrawled) {
-      logger.info(
-        `⏩ Subject already crawled | ${university.name} | ${year} | ${subject.name}`
-      );
       continue;
     }
 
@@ -215,10 +210,8 @@ export async function crawlCombination({
       institute,
       progressFileContent,
     });
+
     if (isInstituteCrawled) {
-      logger.info(
-        `⏩ Institute already crawled | ${university.name} | ${year} | ${institute.name}`
-      );
       continue;
     }
 
@@ -283,9 +276,6 @@ export async function crawlCombination({
     });
 
     if (isThesisTypeCrawled) {
-      logger.info(
-        `⏩ Thesis type already crawled | ${university.name} | ${year} | ${thesisType.name}`
-      );
       continue;
     }
 
