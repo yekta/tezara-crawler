@@ -40,6 +40,7 @@ async function main(batchSize = 100): Promise<void> {
     const languages = new Set<string>();
     const pageCounts = new Set<string>();
     const years = new Set<string>();
+    const allTheses = new Map<number, TFinalThesis>();
 
     for (let i = 0; i < jsonFiles.length; i += batchSize) {
       console.log(
@@ -48,6 +49,7 @@ async function main(batchSize = 100): Promise<void> {
         ).toLocaleString()}`
       );
       const {
+        thesesCleaned,
         fileCount,
         totalProblems,
         universities: universitiesBatch,
@@ -63,6 +65,8 @@ async function main(batchSize = 100): Promise<void> {
         inputDir,
         outputDir,
       });
+
+      thesesCleaned.forEach((t) => allTheses.set(t.id, t));
 
       universitiesBatch.forEach((u) => universities.add(u));
       institutesBatch.forEach((i) => institutes.add(i));
@@ -139,6 +143,9 @@ async function main(batchSize = 100): Promise<void> {
       `\n\n\n🟢 Processed ${processedFileCount.toLocaleString()} thesis records from input.`
     );
     console.log(
+      `🟢 Cleaned unique theses count: ${allTheses.size.toLocaleString()}`
+    );
+    console.log(
       `🟢 Total problems fixed: ${grandTotalProblems.toLocaleString()}`
     );
 
@@ -168,11 +175,11 @@ function processBatch({
     allTheses.push(...data);
   }
 
-  const cleanedAllTheses: TFinalThesis[] = [];
+  const allThesesCleaned: TFinalThesis[] = [];
 
   for (let i = 0; i < allTheses.length; i++) {
     const { thesis, problemsCount } = cleanThesis(allTheses[i]);
-    cleanedAllTheses.push(thesis);
+    allThesesCleaned.push(thesis);
     totalProblems += problemsCount;
   }
 
@@ -184,8 +191,8 @@ function processBatch({
   if (!fs.existsSync(outputFolder)) {
     fs.mkdirSync(outputFolder, { recursive: true });
   }
-  for (let i = 0; i < cleanedAllTheses.length; i += chunkSize) {
-    allArrays.push(cleanedAllTheses.slice(i, i + chunkSize));
+  for (let i = 0; i < allThesesCleaned.length; i += chunkSize) {
+    allArrays.push(allThesesCleaned.slice(i, i + chunkSize));
   }
   for (let i = 0; i < allArrays.length; i++) {
     const filePath = path.join(
@@ -215,7 +222,7 @@ function processBatch({
   const pageCounts = new Set<string>();
   const years = new Set<string>();
 
-  cleanedAllTheses.forEach((thesis) => {
+  allThesesCleaned.forEach((thesis) => {
     authors.add(thesis.author);
     thesis.advisors.forEach((a) => advisors.add(a));
     titles.add(thesis.title_original);
@@ -303,7 +310,7 @@ function processBatch({
   console.log(`Processed ${allTheses.length.toLocaleString()} theses.`);
   console.log(`Problem count for the batch: ${totalProblems.toLocaleString()}`);
   return {
-    fileCount: cleanedAllTheses.length,
+    fileCount: allThesesCleaned.length,
     totalProblems,
     universities,
     institutes,
@@ -313,6 +320,7 @@ function processBatch({
     languages,
     pageCounts,
     years,
+    thesesCleaned: allThesesCleaned,
   };
 }
 

@@ -12,7 +12,7 @@
     "dev": "tsx watch src/index.ts",
     "parse": "node --max-old-space-size=16000 --import tsx src/parse-as-json/parse-as-json.ts",
     "extend": "tsx src/extend-json/extend-json.ts",
-    "clean": "tsx src/clean-json/clean-json.ts",
+    "clean": "node --max-old-space-size=16000 --import tsx src/clean-json/clean-json.ts",
     "push-to-postgres": "tsx src/push-to-db/push-to-postgres.ts",
     "push-to-meili": "node --max-old-space-size=16000 --import tsx src/push-to-db/push-to-meili.ts",
     "push-to-clickhouse": "node --max-old-space-size=16000 --import tsx src/push-to-db/push-to-clickhouse/push-to-clickhouse.ts",
