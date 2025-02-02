@@ -157,7 +157,7 @@ async function main(mainBatchSize = 100): Promise<void> {
       fs.mkdirSync(dir, { recursive: true });
     }
     const batchSize = 10_000;
-    const arr = Array.from(allTheses.values());
+    const arr = Array.from(allTheses.values()).sort((a, b) => a.id - b.id);
     for (let i = 0; i < arr.length; i += batchSize) {
       const batch = arr.slice(i, i + batchSize);
       const hash = md5Hash(batch.map((t) => t.id).join(","));
