@@ -22,7 +22,7 @@ import {
 } from "./utils";
 
 export const MAX_RECORD_COUNT = 1900;
-export const MIN_YEAR = 1940;
+export const MIN_YEAR = 1950;
 
 export async function crawl({
   browser,
