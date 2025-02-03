@@ -19,6 +19,7 @@ export type Institute = {
 };
 
 export interface CrawlerConfig {
+  parallelWorkers: number;
   baseUrl: string;
   downloadDir: string;
   logsDir: string;

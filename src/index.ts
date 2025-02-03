@@ -56,7 +56,7 @@ async function mainLoop() {
     );
 
     await crawl({
-      page,
+      browser,
       universities,
       years,
       subjects,

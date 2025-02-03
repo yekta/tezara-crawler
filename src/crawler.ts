@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import pRetry from "p-retry";
-import type { Page } from "puppeteer";
+import type { Browser, BrowserContext, Page } from "puppeteer";
 import { config } from "./config";
 import { logger } from "./logger";
 import type {
@@ -19,12 +19,13 @@ import {
   markThesisTypeAsCrawled,
   markUniversityAsCrawled,
 } from "./utils";
+import { chunkArray, createIsolatedContext } from "./helpers";
 
 export const MAX_RECORD_COUNT = 1900;
 export const MIN_YEAR = 1940;
 
 export async function crawl({
-  page,
+  browser,
   universities,
   years,
   subjects,
@@ -33,7 +34,7 @@ export async function crawl({
   config,
   progressFileContent,
 }: {
-  page: Page;
+  browser: Browser;
   universities: University[];
   subjects: Subject[];
   institutes: Institute[];
@@ -42,29 +43,49 @@ export async function crawl({
   config: CrawlerConfig;
   progressFileContent: string;
 }) {
+  const tasks = [];
   for (const year of years) {
     for (const university of universities) {
-      const isUniversityCrawled = isAlreadyCrawled({
-        university,
-        year,
-        progressFileContent,
-      });
-
-      if (isUniversityCrawled) {
-        continue;
-      }
-
-      await crawlCombination({
-        page,
-        university,
-        year,
-        subjects,
-        institutes,
-        thesisTypes,
-        config,
-        progressFileContent,
-      });
+      tasks.push({ university, year });
     }
+  }
+
+  const workers = await Promise.all(
+    Array(config.parallelWorkers)
+      .fill(null)
+      .map(() => createIsolatedContext(browser))
+  );
+
+  // Process three tasks at a time
+  for (let i = 0; i < tasks.length; i += config.parallelWorkers) {
+    const currentTasks = tasks.slice(i, i + config.parallelWorkers);
+
+    await Promise.all(
+      currentTasks.map(async (task, index) => {
+        if (
+          isAlreadyCrawled({
+            university: task.university,
+            year: task.year,
+            progressFileContent,
+          })
+        ) {
+          return;
+        }
+
+        await crawlCombination({
+          page: workers[index].page,
+          university: task.university,
+          year: task.year,
+          subjects,
+          institutes,
+          thesisTypes,
+          config,
+          progressFileContent,
+        });
+      })
+    );
+
+    logger.info(`Completed tasks ${i + 1} to ${i + currentTasks.length}`);
   }
 }
 
@@ -559,4 +580,45 @@ async function searchAndCrawl({
       },
     }
   );
+}
+
+async function processChunk({
+  worker,
+  tasks,
+  subjects,
+  institutes,
+  thesisTypes,
+  config,
+  progressFileContent,
+}: {
+  worker: { context: BrowserContext; page: Page };
+  tasks: Array<{ university: University; year: string }>;
+  subjects: Subject[];
+  institutes: Institute[];
+  thesisTypes: ThesisType[];
+  config: CrawlerConfig;
+  progressFileContent: string;
+}) {
+  for (const task of tasks) {
+    const isUniversityCrawled = isAlreadyCrawled({
+      university: task.university,
+      year: task.year,
+      progressFileContent,
+    });
+
+    if (isUniversityCrawled) {
+      continue;
+    }
+
+    await crawlCombination({
+      page: worker.page,
+      university: task.university,
+      year: task.year,
+      subjects,
+      institutes,
+      thesisTypes,
+      config,
+      progressFileContent,
+    });
+  }
 }
