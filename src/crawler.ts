@@ -3,6 +3,7 @@ import path from "node:path";
 import pRetry from "p-retry";
 import type { Browser, BrowserContext, Page } from "puppeteer";
 import { config } from "./config";
+import { createIsolatedContext } from "./helpers";
 import { logger } from "./logger";
 import type {
   CrawlerConfig,
@@ -19,7 +20,6 @@ import {
   markThesisTypeAsCrawled,
   markUniversityAsCrawled,
 } from "./utils";
-import { chunkArray, createIsolatedContext } from "./helpers";
 
 export const MAX_RECORD_COUNT = 1900;
 export const MIN_YEAR = 1940;
@@ -50,11 +50,25 @@ export async function crawl({
     }
   }
 
-  const workers = await Promise.all(
-    Array(config.parallelWorkers)
-      .fill(null)
-      .map(() => createIsolatedContext(browser))
-  );
+  let contexts: {
+    page: Page;
+    context: BrowserContext;
+    subcontexts: { page: Page; context: BrowserContext }[];
+  }[] = [];
+
+  for (let i = 0; i < config.parallelWorkers; i++) {
+    const context = await createIsolatedContext(browser);
+    const subcontexts = await Promise.all(
+      Array(config.parallelWorkers)
+        .fill(null)
+        .map(() => createIsolatedContext(browser))
+    );
+    contexts.push({
+      page: context.page,
+      context: context.context,
+      subcontexts,
+    });
+  }
 
   // Process three tasks at a time
   for (let i = 0; i < tasks.length; i += config.parallelWorkers) {
@@ -73,7 +87,8 @@ export async function crawl({
         }
 
         await crawlCombination({
-          page: workers[index].page,
+          page: contexts[index].page,
+          subcontexts: contexts[index].subcontexts,
           university: task.university,
           year: task.year,
           subjects,
@@ -84,13 +99,12 @@ export async function crawl({
         });
       })
     );
-
-    logger.info(`Completed tasks ${i + 1} to ${i + currentTasks.length}`);
   }
 }
 
 export async function crawlCombination({
   page,
+  subcontexts,
   university,
   year,
   subjects,
@@ -100,6 +114,7 @@ export async function crawlCombination({
   progressFileContent,
 }: {
   page: Page;
+  subcontexts: { page: Page; context: BrowserContext }[];
   university: University;
   year: string;
   subjects: Subject[];
@@ -156,196 +171,55 @@ export async function crawlCombination({
     `⚠️ Record count (${recordCount}) exceeds limit. Trying with subjects and thesis types...`
   );
 
-  //////////////////
   //// SUBJECTS ////
-  //////////////////
-  for (const subject of subjects) {
-    // Skip if already crawled
-    const isSubjectCrawled = isAlreadyCrawled({
-      university,
-      year,
-      subject,
-      progressFileContent,
-    });
-
-    if (isSubjectCrawled) {
-      continue;
-    }
-
-    const { html, recordCount } = await searchAndCrawl({
-      page,
-      university,
-      year,
-      subject,
-    });
-
-    if (recordCount === 0) {
-      logger.info(
-        `📜🟡 No results found | ${university.name} | ${year} | ${subject.name}`
-      );
-      await markSubjectAsCrawled({
-        university,
-        subject,
-        year,
-        progressFile: config.progressFile,
-      });
-    } else {
-      const filepath = generateFilePath({
-        dir: config.downloadDir,
-        university,
-        subject,
-        year,
-      });
-      await fs.writeFile(filepath, html);
-
-      if (recordCount <= MAX_RECORD_COUNT) {
-        logger.info(
-          `📜🟢 Created HTML file | ${university.name} | ${year} | ${subject.name}`
-        );
-      } else {
-        logger.info(
-          `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${subject.name}`
-        );
-        logger.warn(
-          `SUBJECTS | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${subject.name}`
-        );
-      }
-
-      await markSubjectAsCrawled({
-        university,
-        subject,
-        year,
-        progressFile: config.progressFile,
-      });
-    }
+  for (let i = 0; i < subjects.length; i += subcontexts.length) {
+    const currentSubjects = subjects.slice(i, i + subcontexts.length);
+    await Promise.all(
+      currentSubjects.map(async (subject, index) =>
+        crawlSubject({
+          page: subcontexts[index].page,
+          university,
+          year,
+          subject,
+          config,
+          progressFileContent,
+        })
+      )
+    );
   }
 
-  ////////////////////
   //// INSTITUTES ////
-  ////////////////////
-  for (const institute of institutes) {
-    // Skip if already crawled
-    const isInstituteCrawled = isAlreadyCrawled({
-      university,
-      year,
-      institute,
-      progressFileContent,
-    });
-
-    if (isInstituteCrawled) {
-      continue;
-    }
-
-    const { html, recordCount } = await searchAndCrawl({
-      page,
-      university,
-      year,
-      institute,
-    });
-
-    if (recordCount === 0) {
-      logger.info(
-        `📜🟡 No results found | ${university.name} | ${year} | ${institute.name}`
-      );
-      await markInstituteAsCrawled({
-        university,
-        year,
-        institute,
-        progressFile: config.progressFile,
-      });
-    } else {
-      const filepath = generateFilePath({
-        dir: config.downloadDir,
-        university,
-        institute,
-        year,
-      });
-      await fs.writeFile(filepath, html);
-
-      if (recordCount <= MAX_RECORD_COUNT) {
-        logger.info(
-          `📜🟢 Created HTML file | ${university.name} | ${year} | ${institute.name}`
-        );
-      } else {
-        logger.info(
-          `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${institute.name}`
-        );
-        logger.warn(
-          `INSTITUTES | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${institute.name}`
-        );
-      }
-
-      await markInstituteAsCrawled({
-        university,
-        year,
-        institute,
-        progressFile: config.progressFile,
-      });
-    }
+  for (let i = 0; i < institutes.length; i += subcontexts.length) {
+    const currentInstitutes = institutes.slice(i, i + subcontexts.length);
+    await Promise.all(
+      currentInstitutes.map(async (institute, index) =>
+        crawlInstitute({
+          page: subcontexts[index].page,
+          university,
+          year,
+          institute,
+          config,
+          progressFileContent,
+        })
+      )
+    );
   }
 
-  /////////////////////
   //// THESIS TYPE ////
-  /////////////////////
-  for (const thesisType of thesisTypes) {
-    // Skip if already crawled
-    const isThesisTypeCrawled = isAlreadyCrawled({
-      university,
-      year,
-      thesisType,
-      progressFileContent,
-    });
-
-    if (isThesisTypeCrawled) {
-      continue;
-    }
-
-    const { html, recordCount } = await searchAndCrawl({
-      page,
-      university,
-      year,
-      thesisType,
-    });
-
-    if (recordCount === 0) {
-      logger.info(
-        `📜🟡 No results found | ${university.name} | ${year} | ${thesisType.name}`
-      );
-      await markThesisTypeAsCrawled({
-        university,
-        year,
-        thesisType,
-        progressFile: config.progressFile,
-      });
-    } else {
-      const filepath = generateFilePath({
-        dir: config.downloadDir,
-        university,
-        year,
-        thesisType,
-      });
-      await fs.writeFile(filepath, html);
-
-      if (recordCount <= MAX_RECORD_COUNT) {
-        logger.info(
-          `📜🟢 Created HTML file | ${university.name} | ${year} | ${thesisType.name}`
-        );
-      } else {
-        logger.info(
-          `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${thesisType.name}`
-        );
-        logger.warn(
-          `THESIS_TYPE | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${thesisType.name}`
-        );
-      }
-
-      await markThesisTypeAsCrawled({
-        university,
-        year,
-        thesisType,
-        progressFile: config.progressFile,
-      });
-    }
+  for (let i = 0; i < thesisTypes.length; i += subcontexts.length) {
+    const currentThesisTypes = thesisTypes.slice(i, i + subcontexts.length);
+    await Promise.all(
+      currentThesisTypes.map(async (thesisType, index) =>
+        crawlThesisType({
+          page: subcontexts[index].page,
+          university,
+          year,
+          thesisType,
+          config,
+          progressFileContent,
+        })
+      )
+    );
   }
 
   // Only mark university as fully crawled after all subjects are done
@@ -582,43 +456,224 @@ async function searchAndCrawl({
   );
 }
 
-async function processChunk({
-  worker,
-  tasks,
-  subjects,
-  institutes,
-  thesisTypes,
+async function crawlSubject({
+  page,
+  university,
+  year,
+  subject,
   config,
   progressFileContent,
 }: {
-  worker: { context: BrowserContext; page: Page };
-  tasks: Array<{ university: University; year: string }>;
-  subjects: Subject[];
-  institutes: Institute[];
-  thesisTypes: ThesisType[];
+  page: Page;
+  university: University;
+  year: string;
+  subject: Subject;
   config: CrawlerConfig;
   progressFileContent: string;
 }) {
-  for (const task of tasks) {
-    const isUniversityCrawled = isAlreadyCrawled({
-      university: task.university,
-      year: task.year,
-      progressFileContent,
-    });
+  const isSubjectCrawled = isAlreadyCrawled({
+    university,
+    year,
+    subject,
+    progressFileContent,
+  });
 
-    if (isUniversityCrawled) {
-      continue;
+  if (isSubjectCrawled) {
+    return;
+  }
+
+  const { html, recordCount } = await searchAndCrawl({
+    page,
+    university,
+    year,
+    subject,
+  });
+
+  if (recordCount === 0) {
+    logger.info(
+      `📜🟡 No results found | ${university.name} | ${year} | ${subject.name}`
+    );
+    await markSubjectAsCrawled({
+      university,
+      subject,
+      year,
+      progressFile: config.progressFile,
+    });
+  } else {
+    const filepath = generateFilePath({
+      dir: config.downloadDir,
+      university,
+      subject,
+      year,
+    });
+    await fs.writeFile(filepath, html);
+
+    if (recordCount <= MAX_RECORD_COUNT) {
+      logger.info(
+        `📜🟢 Created HTML file | ${university.name} | ${year} | ${subject.name}`
+      );
+    } else {
+      logger.info(
+        `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${subject.name}`
+      );
+      logger.warn(
+        `SUBJECTS | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${subject.name}`
+      );
     }
 
-    await crawlCombination({
-      page: worker.page,
-      university: task.university,
-      year: task.year,
-      subjects,
-      institutes,
-      thesisTypes,
-      config,
-      progressFileContent,
+    await markSubjectAsCrawled({
+      university,
+      subject,
+      year,
+      progressFile: config.progressFile,
+    });
+  }
+}
+
+async function crawlInstitute({
+  page,
+  university,
+  year,
+  institute,
+  config,
+  progressFileContent,
+}: {
+  page: Page;
+  university: University;
+  year: string;
+  institute: Institute;
+  config: CrawlerConfig;
+  progressFileContent: string;
+}) {
+  const isInstituteCrawled = isAlreadyCrawled({
+    university,
+    year,
+    institute,
+    progressFileContent,
+  });
+
+  if (isInstituteCrawled) {
+    return;
+  }
+
+  const { html, recordCount } = await searchAndCrawl({
+    page,
+    university,
+    year,
+    institute,
+  });
+
+  if (recordCount === 0) {
+    logger.info(
+      `📜🟡 No results found | ${university.name} | ${year} | ${institute.name}`
+    );
+    await markInstituteAsCrawled({
+      university,
+      year,
+      institute,
+      progressFile: config.progressFile,
+    });
+  } else {
+    const filepath = generateFilePath({
+      dir: config.downloadDir,
+      university,
+      institute,
+      year,
+    });
+    await fs.writeFile(filepath, html);
+
+    if (recordCount <= MAX_RECORD_COUNT) {
+      logger.info(
+        `📜🟢 Created HTML file | ${university.name} | ${year} | ${institute.name}`
+      );
+    } else {
+      logger.info(
+        `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${institute.name}`
+      );
+      logger.warn(
+        `INSTITUTES | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${institute.name}`
+      );
+    }
+
+    await markInstituteAsCrawled({
+      university,
+      year,
+      institute,
+      progressFile: config.progressFile,
+    });
+  }
+}
+
+async function crawlThesisType({
+  page,
+  university,
+  year,
+  thesisType,
+  config,
+  progressFileContent,
+}: {
+  page: Page;
+  university: University;
+  year: string;
+  thesisType: ThesisType;
+  config: CrawlerConfig;
+  progressFileContent: string;
+}) {
+  const isThesisTypeCrawled = isAlreadyCrawled({
+    university,
+    year,
+    thesisType,
+    progressFileContent,
+  });
+
+  if (isThesisTypeCrawled) {
+    return;
+  }
+
+  const { html, recordCount } = await searchAndCrawl({
+    page,
+    university,
+    year,
+    thesisType,
+  });
+
+  if (recordCount === 0) {
+    logger.info(
+      `📜🟡 No results found | ${university.name} | ${year} | ${thesisType.name}`
+    );
+    await markThesisTypeAsCrawled({
+      university,
+      year,
+      thesisType,
+      progressFile: config.progressFile,
+    });
+  } else {
+    const filepath = generateFilePath({
+      dir: config.downloadDir,
+      university,
+      year,
+      thesisType,
+    });
+    await fs.writeFile(filepath, html);
+
+    if (recordCount <= MAX_RECORD_COUNT) {
+      logger.info(
+        `📜🟢 Created HTML file | ${university.name} | ${year} | ${thesisType.name}`
+      );
+    } else {
+      logger.info(
+        `📜🟣 Created HTML file but record count exceeds limit | ${university.name} | ${year} | ${thesisType.name}`
+      );
+      logger.warn(
+        `THESIS_TYPE | ⚠️ Record count exceeds limit of ${MAX_RECORD_COUNT} | ${university.name} | ${year} | ${thesisType.name}`
+      );
+    }
+
+    await markThesisTypeAsCrawled({
+      university,
+      year,
+      thesisType,
+      progressFile: config.progressFile,
     });
   }
 }
