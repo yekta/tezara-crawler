@@ -59,7 +59,7 @@ export async function crawl({
   for (let i = 0; i < config.parallelWorkers; i++) {
     const context = await createIsolatedContext(browser);
     const subcontexts = await Promise.all(
-      Array(config.parallelWorkers)
+      Array(config.parallelSubworkers)
         .fill(null)
         .map(() => createIsolatedContext(browser))
     );
