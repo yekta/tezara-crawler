@@ -232,7 +232,7 @@ async function processBatchParallel(
   return await Promise.all(promises);
 }
 
-async function main(batchSize = 500): Promise<void> {
+async function main(batchSize = 200): Promise<void> {
   try {
     const inputDir = path.join(__dirname, "..", "..", "jsons");
     const outputDir = path.join(__dirname, "..", "..", "jsons-extended");
