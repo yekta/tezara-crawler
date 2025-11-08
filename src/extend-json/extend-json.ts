@@ -161,6 +161,7 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
       const response = await fetch(detailsUrl);
 
       if (response.ok) {
+        console.log("response is okay for", detailsUrl);
         const htmlContent = await response.text();
         const extendedData = parseThesisExtended(htmlContent);
 
@@ -175,7 +176,6 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
             `Failed after ${maxRetries} attempts. Last status ${response.status} for ${detailsUrl}`
           );
         } else {
-          console.log("Failed to fetch thesis details:", detailsUrl);
           console.info(
             `Attempt ${retryCount}/${maxRetries} => status ${response.status}. Retrying...`
           );
@@ -189,7 +189,6 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
           `Failed after ${maxRetries} attempts. Last error for ${detailsUrl}: ${error}`
         );
       } else {
-        console.log("Error fetching thesis details:", detailsUrl);
         console.info(
           `Attempt ${retryCount}/${maxRetries} => error: ${error}. Retrying...`
         );
