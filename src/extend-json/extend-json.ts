@@ -161,7 +161,7 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
       const response = await fetch(detailsUrl);
 
       if (response.ok) {
-        console.log("response is okay for", detailsUrl);
+        console.log("Response is okay");
         const htmlContent = await response.text();
         const extendedData = parseThesisExtended(htmlContent);
 
@@ -233,7 +233,7 @@ async function processBatchParallel(
   return await Promise.all(promises);
 }
 
-async function main(batchSize = 200): Promise<void> {
+async function main(batchSize = 10): Promise<void> {
   try {
     const inputDir = path.join(__dirname, "..", "..", "jsons");
     const outputDir = path.join(__dirname, "..", "..", "jsons-extended");
