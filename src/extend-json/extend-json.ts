@@ -11,6 +11,7 @@ import {
   parseLocationInfo,
   shapeThesis,
 } from "./helpers";
+import { Agent, fetch, Response as UResponse } from "undici";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -149,7 +150,7 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
     };
   }
 
-  const detailsUrl = `http://tez.yok.gov.tr/UlusalTezMerkezi/tezDetay.jsp?id=${thesis.id_1}&no=${thesis.id_2}`;
+  const detailsUrl = `https://tez.yok.gov.tr/UlusalTezMerkezi/tezDetay.jsp?id=${thesis.id_1}&no=${thesis.id_2}`;
 
   const maxRetries = 20;
   let retryCount = 0;
@@ -158,9 +159,10 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
   while (retryCount < maxRetries) {
     try {
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
-      let response: Response;
+      let response: UResponse;
       try {
-        response = await fetch(detailsUrl);
+        const insecure = new Agent({ connect: { rejectUnauthorized: false } });
+        response = await fetch(detailsUrl, { dispatcher: insecure });
       } catch (error) {
         console.log("THERE IS A FETCH ERROR", error);
         throw error;
@@ -238,7 +240,7 @@ async function processBatchParallel(
   return await Promise.all(promises);
 }
 
-async function main(batchSize = 10): Promise<void> {
+async function main(batchSize = 500): Promise<void> {
   try {
     const inputDir = path.join(__dirname, "..", "..", "jsons");
     const outputDir = path.join(__dirname, "..", "..", "jsons-extended");
