@@ -175,6 +175,7 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
             `Failed after ${maxRetries} attempts. Last status ${response.status} for ${detailsUrl}`
           );
         } else {
+          console.log("Failed to fetch thesis details:", detailsUrl);
           console.info(
             `Attempt ${retryCount}/${maxRetries} => status ${response.status}. Retrying...`
           );
