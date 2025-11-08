@@ -149,7 +149,7 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
     };
   }
 
-  const detailsUrl = `https://tez.yok.gov.tr/UlusalTezMerkezi/tezDetay.jsp?id=${thesis.id_1}&no=${thesis.id_2}`;
+  const detailsUrl = `http://tez.yok.gov.tr/UlusalTezMerkezi/tezDetay.jsp?id=${thesis.id_1}&no=${thesis.id_2}`;
 
   const maxRetries = 20;
   let retryCount = 0;
