@@ -158,10 +158,15 @@ async function fetchThesisDetails(thesis: Thesis): Promise<ThesisExtended> {
   while (retryCount < maxRetries) {
     try {
       await new Promise((resolve) => setTimeout(resolve, retryDelay));
-      const response = await fetch(detailsUrl);
+      let response: Response;
+      try {
+        response = await fetch(detailsUrl);
+      } catch (error) {
+        console.log("THERE IS A FETCH ERROR", error);
+        throw error;
+      }
 
       if (response.ok) {
-        console.log("Response is okay");
         const htmlContent = await response.text();
         const extendedData = parseThesisExtended(htmlContent);
 
